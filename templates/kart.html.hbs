@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {{> common/script_blocks/chart }}
+    {{> common/script_blocks/sortable_tables }}
+    {{> common/script_blocks/tailwind }}
+
+    <title>Heat</title>
+</head>
+<body>
+<article class="max-w-6xl px-6 py-24 mx-auto space-y-16 dark:bg-gray-800 dark:text-gray-50">
+    <div class="w-full mx-auto space-y-4">
+        <h1 class="text-5xl font-bold leading-none">
+            Kart: {{data.number}}
+        </h1>
+        {{formatChildKart data.is_child_kart}}
+    </div>
+    <p class="dark:text-gray-100">
+    <h2 class="text-4xl font-bold dark:text-white">
+        Lap Times
+    </h2>
+    <p>
+        The following table gives an overview of all lap times driven in the kart including slow laps.
+        <canvas id="chart-0" width="" height=""></canvas>
+    </p>
+    <p>
+    <h2 class="text-3xl font-bold dark:text-white">
+        All Laps
+    </h2>
+        the following chart shows all laps
+        <canvas id="chart-1"></canvas>
+        the following shows the average, minimum and median
+        <canvas id="chart-2"></canvas>
+    </p>
+    <br>
+    <p>
+    <h2 class="text-4xl font-bold dark:text-white">
+        Drivers
+    </h2>
+        The following table show the name of all drivers and the the general stats of them in the specific kart
+        <br/>
+        <br/>
+    <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 sortable">
+        <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+        <tr>
+            <th scope="col" class="px-6 py-3">
+                Driver
+            </th>
+            <th scope="col" class="px-6 py-3">
+                Average Lap Time
+            </th>
+            <th scope="col" class="px-6 py-3">
+                Best Lap Time
+            </th>
+            <th scope="col" class="px-6 py-3">
+                Best Lap
+            </th>
+            <th scope="col" class="px-6 py-3">
+                Number of Laps
+            </th>
+        </tr>
+        </thead>
+        <tbody>
+
+        {{#each data.drivers as |driver|}}
+            <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                    {{driver.driver_name}}
+                </th>
+                <td class="px-6 py-4">
+                    {{driver.avg_lap_time}}
+                </td>
+                <td class="px-6 py-4">
+                    {{driver.fastest_lap.lap_time}}
+                </td>
+                <td class="px-6 py-4">
+                    {{driver.fastest_lap.lap_in_heat}}
+                </td>
+                <td class="px-6 py-4">
+                    {{driver.total_laps}}
+                </td>
+            </tr>
+        {{/each}}
+        </tbody>
+    </table>
+</article>
+{{{json_data}}}
+
+
+<script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.1.0/build/index.umd.min.js"></script>
+<script src="/static/js/heats/createAllLapTimesPlot.js"></script>
+<script src="/static/js/heats/createAllKartLapChart.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="/static/js/heats/createTimeLineChart.js"></script>
+
+<script>
+    const data = JSON.parse('{{{ json_data }}}');
+
+
+    const violinChartCanvas = document.getElementById(`chart-0`);
+    const allLapsCanvas = document.getElementById('chart-1');
+    const timeLineAvgCanvas = document.getElementById('chart-2')
+
+    const violinChart = createLapTimeViolinChart(data, violinChartCanvas, "all");
+    const lineChart = createAllKartLapChart(data.lap_drivers, allLapsCanvas);
+    const lineTimescaleRawData = createTimeLineChart({
+        avg_day: data.laps_avg_per_day,
+        median_day: data.laps_median_per_day,
+        minimum_day: data.laps_min_per_day
+    }, timeLineAvgCanvas);
+</script>
+</body>
+</html>

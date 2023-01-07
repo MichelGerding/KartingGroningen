@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {{> common/script_blocks/chart }}
+    {{> common/script_blocks/sortable_tables }}
+    {{> common/script_blocks/tailwind }}
+
+    <title>Heat</title>
+</head>
+<body>
+<article class="max-w-6xl px-6 py-24 mx-auto space-y-16 dark:bg-gray-800 dark:text-gray-50">
+    <div class="w-full mx-auto space-y-4">
+        <h1 class="text-5xl font-bold leading-none">
+            Heat: {{data.heat_id}}
+        </h1>
+        <div class="flex flex-wrap space-x-2 text-sm dark:text-gray-400">
+            {{formatDate data.start_date}}, {{formatHeatType data.heat_type}}
+        </div>
+    </div>
+    <div class="dark:text-gray-100">
+        <h2 class="text-4xl font-bold dark:text-white">
+            Lap Times
+        </h2>
+        <p>
+            The following table gives an overview of all lap times driven in the heat including slow laps.
+            To filter the laps you can select which type of lap to exclude or show by selecting it below the chart.
+            <canvas id="chart-0" width="" height=""></canvas>
+
+            <label for="laps">
+                Select Laps
+            </label>
+            <select name="laps" id="laps">
+                <option value="all">All laps</option>
+                <option value="normal">Normal laps</option>
+                <option value="outlier">Outliers</option>
+            </select>
+        </p>
+        <br>
+        <h2 class="text-4xl font-bold dark:text-white">
+            Timeline
+        </h2>
+        <p>
+            the following chart gives a different visualization of the driven laps.<br>
+            This chart next to the lap time also shows you when the lap was driven this is used to more easely
+            identify accidents or other events that slowed all drivers so that it can be filtered out.
+            <canvas id="chart-1"></canvas>
+
+        </p>
+        <br>
+
+            <h2 class="text-4xl font-bold dark:text-white">
+                Drivers
+            </h2>
+        <p>
+            The following table show the general stats of the driver. the table can be sorted by clicking on the column names.
+
+
+            <br />
+            <br />
+            <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 sortable">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+                <tr>
+                    <th scope="col" class="px-6 py-3">
+                        Driver
+                    </th>
+                    <th scope="col" class="px-6 py-3">
+                        Average Lap Time
+                    </th>
+                    <th scope="col" class="px-6 py-3">
+                        Best Lap Time
+                    </th>
+                    <th scope="col" class="px-6 py-3">
+                        Best Lap
+                    </th>
+                    <th scope="col" class="px-6 py-3">
+                        Number of Laps
+                    </th>
+                    <th scope="col" class="px-6 py-3">Kart number</th>
+                </tr>
+                </thead>
+                <tbody>
+
+                {{#each data.drivers as |driver|}}
+                    <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                        <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                            {{driver.driver_name}}
+                        </th>
+                        <td class="px-6 py-4">
+                            {{driver.avg_lap_time}}
+                        </td>
+                        <td class="px-6 py-4">
+                            {{driver.fastest_lap.lap_time}}
+                        </td>
+                        <td class="px-6 py-4">
+                            {{driver.fastest_lap.lap_in_heat}}
+                        </td>
+                        <td class="px-6 py-4">
+                            {{driver.total_laps}}
+                        </td>
+                        <td class="px-6 py-4">
+                            {{driver.kart}}
+                        </td>
+                    </tr>
+                {{/each}}
+                </tbody>
+            </table>
+        </p>
+    </div>
+</article>
+
+
+</div>
+</div>
+
+<script src="/static/js/heats/createLapTimeChart.js"></script>
+<script src="/static/js/heats/createTimeLineChart.js"></script>
+<script>
+    const data = JSON.parse('{{{ json_string }}}');
+
+    const lineChartCanvas = document.getElementById(`chart-0`);
+    const timeLineChartCanvas = document.getElementById(`chart-1`);
+
+    const dataType = document.getElementById('laps').value;
+
+    // make the filter changeable
+    const lineChart = createLapTimeChart(data, lineChartCanvas, "all");
+    const timeLineChart = createTimeLineChart(data, timeLineChartCanvas);
+</script>
+</body>
+</html>

@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>List Of Heats</title>
+
+
+    {{> common/script_blocks/tailwind }}
+    {{> common/script_blocks/sortable_tables }}
+</head>
+<body>
+
+{{> common/components/navbar }}
+<main class="relative">
+
+    <h1 class="mb-4 text-3xl font-extrabold text-gray-900 dark:text-white md:text-5xl lg:text-6xl">
+        <span class="text-transparent bg-clip-text bg-gradient-to-r to-emerald-600 from-sky-400">View All Karts</span>
+    </h1>
+
+    <div class="relative overflow-x-auto">
+        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 sortable">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+            <tr>
+                <th scope="col" class="px-6 py-3">
+                    Kart Number
+                </th>
+                <th scope="col" class="px-6 py-3">
+                    Total Amount Of Laps
+                </th>
+                <th scope="col" class="px-6 py-3">
+                    Total Amount Of Drivers
+                </th>
+                <th scope="col" class="px-6 py-3">
+                    Type Of Kart
+                </th>
+                <th scope="col" class="px-6 py-3"></th>
+            </tr>
+            </thead>
+            <tbody>
+            <!--            struct TemplateDataKart {-->
+            <!--            number: i32,-->
+            <!--            is_child_kart: bool,-->
+            <!--            total_laps: i32,-->
+            <!--            total_drivers: i32,-->
+            <!--            }-->
+            {{#each results as |kart|}}
+                    <tr class="{{kart.bg}} border-current dark:bg-gray-800 dark:border-gray-700">
+                    <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                        {{kart.number}}
+                    </th>
+                    <td class="px-6 py-4">
+                        {{kart.total_laps}}
+                    </td>
+                    <td class="px-6 py-4">
+                        {{kart.total_drivers}}
+                    </td>
+                    <td class="px-6 py-4">
+                        {{kart.is_child_kart}}
+                    </td>
+                    <td class="px-6 py-4">
+                        <a
+                                href="/karts/single/{{kart.number}}"
+                                class="bg-white hover:bg-gray-100 text-gray-800 font-semibold py-2 px-4 border border-gray-400 rounded shadow">
+                            Analyze
+                        </a>
+                    </td>
+                </tr>
+            {{/each}}
+            </tbody>
+        </table>
+    </div>
+
+</main>
+
+</body>
+</html>

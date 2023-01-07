@@ -1,0 +1,17 @@
+version: '3.7'
+
+
+services:
+  db:
+    image: postgres:latest
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=mauFJcuf5dhRMQrjj
+#     - url postgresql://postgres:mauFJcuf5dhRMQrjj@localhost:5432/KartingGroningen
+    network_mode: host
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
