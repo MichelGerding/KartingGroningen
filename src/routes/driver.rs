@@ -29,7 +29,7 @@ pub fn list_all(origin: &Origin) -> Template {
     let all_data;
     let uri = origin.path().to_string();
     if Redis::has_data::<String>(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()[..]).unwrap()
+        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         // if not in cache we get the value and store in cache
         let connection = &mut establish_connection();
@@ -79,7 +79,7 @@ pub fn list_all(origin: &Origin) -> Template {
 
 #[get("/<driver_name>")]
 pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> {
-    let sanitized = sanitize_name(&driver_name[..]);
+    let sanitized = sanitize_name(&driver_name);
     if sanitized != driver_name {
         return Err(Status::BadRequest)
     }
@@ -90,7 +90,7 @@ pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> 
 
     let all_data;
     if Redis::has_data(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()[..]).unwrap()
+        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
 
         let conn = &mut establish_connection();
@@ -100,31 +100,31 @@ pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> 
             Err(_) => return Err(Status::NotFound),
         };
         let laps = &driver.get_laps(conn);
-        let heats = Heat::from_laps(conn, &laps[..]);
+        let heats = Heat::from_laps(conn, &laps);
         let karts = Kart::get_all(conn);
 
         let mut datasets = Vec::new();
         let mut table_rows: Vec<Vec<String>> = Vec::new();
-        let laps_per_heat = Heat::get_laps_per_heat(&heats[..], &laps[..]);
+        let laps_per_heat = Heat::get_laps_per_heat(&heats, &laps);
 
         for (heat, laps) in laps_per_heat {
             let kart = karts.clone()
-                .into_iter()
+                .iter()
                 .find(|e| e.id == laps[0].kart_id)
                 .unwrap();
             let laps_statistics = Lap::get_stats_of_laps(&laps);
 
             let fastest_lap: Lap =
-                Lap::find_laptime_in_laps(laps_statistics.fastest_lap_time.clone(), &laps[..]).unwrap();
+                Lap::find_laptime_in_laps(laps_statistics.fastest_lap_time.clone(), &laps).unwrap();
 
             table_rows.push(generate_data_rows(
                 &heat,
-                &laps[..],
+                &laps,
                 laps_statistics,
                 &fastest_lap,
-                &kart,
+                kart,
             ));
-            datasets.push(generate_data_set(&heat, &laps[..], driver.clone()));
+            datasets.push(generate_data_set(&heat, &laps, driver.clone()));
         }
 
         all_data = SingleResponse {

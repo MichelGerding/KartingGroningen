@@ -235,8 +235,8 @@ fn list_to_chart_data_set(
 ) -> Vec<ChartDataDataSetData> {
     let drivers_hash_map = drivers
         .iter()
-        .map(|driver| (driver.id, driver))
-        .collect::<HashMap<i32, &Driver>>();
+        .map(|driver| (driver.id, driver.to_owned()))
+        .collect::<HashMap<i32, Driver>>();
     let heats_hash_map = heats
         .iter()
         .map(|heat| (heat.id, heat))
@@ -244,14 +244,12 @@ fn list_to_chart_data_set(
 
     laps.iter()
         .map(|x| ChartDataDataSetData {
+
             date: Some(heats_hash_map.get(&x.heat).unwrap().start_date.date()),
-            driver: Some(
+            driver:
                 drivers_hash_map
                     .get(&x.driver)
-                    .unwrap()
-                    .to_owned()
-                    .to_owned(),
-            ),
+                    .copied(),
             lap_time: x.lap_time,
         })
         .collect()
