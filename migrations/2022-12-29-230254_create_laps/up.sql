@@ -15,8 +15,3 @@ create table public.Laps
         FOREIGN KEY ("driver")
         REFERENCES public.Drivers("id")
 );
-
-alter table Drivers
-    add constraint fk_driver_laps
-        foreign key ("fastest_lap") references Laps ("id");
-

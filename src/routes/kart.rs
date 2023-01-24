@@ -1,101 +1,269 @@
-use std::collections::HashMap;
+// Datatypes
 use chrono::NaiveDate;
-use rocket::{get};
-use rocket_dyn_templates::{context, Template};
+use diesel::PgConnection;
+use std::collections::hash_map::Iter;
+use std::collections::HashMap;
+use std::thread;
+// Rocket imports
+use rocket::get;
+use rocket::http::Status;
+use rocket::http::uri::Origin;
+use rocket_dyn_templates::{Template};
+// Utility imports
 use serde::{Deserialize, Serialize};
-
-use crate::modules::models::general::establish_connection;
-use crate::modules::models::lap::{Lap, LapDriver};
-
+// Templating imports
+use crate::{AllDataWithCharts, ChartData, ChartDataDataSetData, ChartDataDataset, TableData};
+// Database imports
 use crate::modules::models::driver::Driver;
-use crate::modules::models::kart::Kart;
-use crate::modules::helpers::driver::DriverHelpers;
-use crate::TemplateDataDriver;
-
+use crate::modules::models::general::establish_connection;
+use crate::modules::models::heat::Heat;
+use crate::modules::models::kart::{Kart, KartStatsPerDay};
+use crate::modules::models::lap::Lap;
+use crate::modules::redis::Redis;
 
 #[get("/all")]
-pub fn list_all() -> Template {
-    let connection = &mut establish_connection();
-    let results: Vec<Kart> = Kart::get_all(connection);
+pub fn list_all(origin: &Origin) -> Template {
+
+    //TODO:: optimize to no longer need all laps
+
+    // get all karts and all laps
+    // we get all laps because we want to get some basic information of the kart.
+    // because we show all karts we need to also get all the laps because all laps have a kart
 
 
-    #[derive(Serialize, Deserialize, Clone)]
-    struct TemplateDataKart {
-        number: i32,
-        is_child_kart: bool,
-        total_laps: i32,
-        total_drivers: i32,
-        bg: String,
+    let r_conn = &mut Redis::connect();
+    let uri = origin.path().to_string();
+
+    let all_data;
+    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
+    } else {
+        let connection: &mut PgConnection = &mut establish_connection();
+        let karts_stats = Kart::get_all_with_stats(connection);
+
+        let table_rows = karts_stats
+            .iter()
+            .map(|stats| {
+                let is_child_kart = if stats.is_child_kart {
+                    "Child Kart"
+                } else {
+                    "Adult Kart"
+                };
+                if stats.lap_count == 0 {
+                    return vec![
+                        stats.number.to_string(),
+                        is_child_kart.to_string(),
+                        "0".to_string(),
+                        "0".to_string(),
+                    ];
+                }
+
+                // return the data to the kart as strings so we can show it in a table
+                vec![
+                    stats.number.to_string(),
+                    is_child_kart.to_string(),
+                    stats.lap_count.to_string(),
+                    stats.driver_count.to_string(),
+                ]
+            })
+            .collect(); // get the stats of all karts per day
+
+        let kart_stats: HashMap<Kart, Vec<KartStatsPerDay>> =
+            Kart::get_stats_per_day_from_db(connection);
+
+
+        let datasets: Vec<ChartDataDataset> = kart_stats
+            .iter()
+            .map(|(kart, stats)| {
+                ChartDataDataset {
+                    label: kart.number.to_string(),
+                    data: stats.iter()
+                        .map(|stat| {
+                            ChartDataDataSetData {
+                                date: Some(stat.start_date.date()),
+                                driver: None,
+                                lap_time: stat.min_laptime,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+
+        all_data = AllDataWithCharts {
+            data_type: "karts".to_string(),
+            chart_data: ChartData {
+                labels: datasets.iter().map(|x| x.label.to_owned()).collect(),
+                datasets,
+            },
+            table_data: TableData {
+                headers: vec![
+                    "Number".to_string(),
+                    "Child Kart".to_string(),
+                    "Total Laps".to_string(),
+                    "Total Drivers".to_string(),
+                    "".to_string(),
+                ],
+                rows: table_rows,
+            },
+        };
+
+        let ad = all_data.clone();
+        thread::spawn(move || {
+            let r_conn = &mut Redis::connect();
+
+            let json = serde_json::to_string(&ad).unwrap();
+            Redis::set_data::<String, String>(r_conn, uri, json);
+        });
     }
-    let mut results_vec: Vec<TemplateDataKart> = Vec::new();
-    for result in &results {
-        let laps_of_kart = Lap::from_kart(connection, result);
-        let drivers_of_kart = Driver::from_laps(connection, &laps_of_kart);
+    // return the template and the data needed to render it
+    Template::render(
+        "all",
+        all_data,
+    )
+}
 
-        let mut bg = "bg-white";
-        if result.is_child_kart.unwrap_or(false) {
-            bg = "bg-gray-200";
-        }
+#[get("/<kart_number>")]
+pub fn single(kart_number: i32, origin: &Origin) -> Result<Template, Status> {
 
-        results_vec.push(TemplateDataKart {
-            number: result.number,
-            is_child_kart: result.is_child_kart.unwrap_or(false),
-            total_laps: laps_of_kart.len() as i32,
-            total_drivers: drivers_of_kart.len() as i32,
-            bg: bg.to_string(),
+    let r_conn = &mut Redis::connect();
+    let uri = origin.path().to_string();
+
+    let all_data;
+    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
+    } else {
+        let connection = &mut establish_connection();
+        let kart = match Kart::get_by_number(connection, kart_number) {
+            Ok(kart) => kart,
+            Err(_) => {
+                return Err(Status::NotFound);
+            }
+        };
+
+        // get all driven laps drivers and heats of the kart
+        let laps = Lap::from_kart(connection, &kart);
+        let drivers = Driver::from_laps(connection, &laps);
+        let heats = Heat::from_laps(connection, &laps);
+
+        // get the daily stats of the kart. these are the average, median and minimum laptime.
+        let avg_per_day = kart.get_average_laptime_per_day(connection);
+        let min_per_day = kart.get_minimum_laptime_per_day(connection);
+        let med_per_day = kart.get_median_laptime_per_day(connection);
+
+        // get all datasets for the charts on the page
+        let datasets: Vec<ChartDataDataset> = vec![
+            ChartDataDataset {
+                label: "Average".to_string(),
+                data: list_to_chart_data_set_without_driver(avg_per_day.iter()),
+            },
+            ChartDataDataset {
+                label: "Minimum".to_string(),
+                data: list_to_chart_data_set_without_driver(min_per_day.iter()),
+            },
+            ChartDataDataset {
+                label: "Median".to_string(),
+                data: list_to_chart_data_set_without_driver(med_per_day.iter()),
+            },
+            ChartDataDataset {
+                label: "All Laps".to_string(),
+                data: list_to_chart_data_set(&laps, &heats, &drivers),
+            },
+            ChartDataDataset {
+                label: "All Laps (Normalized)".to_string(),
+                data: list_to_chart_data_set(&Lap::filter_outliers(&laps), &heats, &drivers),
+            },
+        ];
+
+        all_data = TemplateDataKart {
+                number: kart.number,
+                is_child_kart: kart.is_child_kart,
+                total_laps: laps.len() as i32,
+                total_drivers: drivers.len() as i32,
+                chart_data: ChartData {
+                    labels: datasets.iter().map(|x| x.label.to_owned()).collect(),
+                    datasets,
+                },
+                table_data: TableData {
+                    headers: vec![
+                        "Driver".to_string(),
+                        "Average Lap Time".to_string(),
+                        "Best Lap Time".to_string(),
+                        "Total Laps".to_string()],
+                    rows: drivers.iter().map(|driver| {
+                        let driver_stats = driver.get_stats_for_laps(connection, &laps);
+
+                        vec![
+                            format!("<a href=\"/drivers/{}\"> {}</a>", driver.name, driver.name),
+                            driver_stats.avg_lap_time.to_string(),
+                            driver_stats.fastest_lap.lap_time.to_string(),
+                            driver_stats.total_laps.to_string(),
+                        ]
+                    }).collect()
+                }
+        };
+
+        let ad = all_data.clone();
+        thread::spawn(move || {
+            let r_conn = &mut Redis::connect();
+
+            let json = serde_json::to_string(&ad).unwrap();
+            Redis::set_data::<String, String>(r_conn, uri, json);
+        });
+    }
+
+    Ok(Template::render(
+        "kart",
+        all_data
+    ))
+}
+
+// CODE DEDUPLICATION FUNCTIONS
+fn list_to_chart_data_set_without_driver(laps: Iter<NaiveDate, f64>) -> Vec<ChartDataDataSetData> {
+    laps.map(|(date, laptime)| ChartDataDataSetData {
+        date: Some(date.to_owned()),
+        driver: None,
+        lap_time: laptime.to_owned(),
+    })
+    .collect()
+}
+
+fn list_to_chart_data_set(
+    laps: &[Lap],
+    heats: &[Heat],
+    drivers: &[Driver],
+) -> Vec<ChartDataDataSetData> {
+    let drivers_hash_map = drivers
+        .iter()
+        .map(|driver| (driver.id, driver))
+        .collect::<HashMap<i32, &Driver>>();
+    let heats_hash_map = heats
+        .iter()
+        .map(|heat| (heat.id, heat))
+        .collect::<HashMap<i32, &Heat>>();
+
+    laps.iter()
+        .map(|x| ChartDataDataSetData {
+            date: Some(heats_hash_map.get(&x.heat).unwrap().start_date.date()),
+            driver: Some(
+                drivers_hash_map
+                    .get(&x.driver)
+                    .unwrap()
+                    .to_owned()
+                    .to_owned(),
+            ),
+            lap_time: x.lap_time,
         })
-    }
-    // get the total number of laps each kart has driven
-
-
-    Template::render("all_karts", context! {
-        results: &results_vec,
-    })
-
+        .collect()
 }
 
-#[get("/single/<kart_number>")]
-pub fn single(kart_number: i32) -> Template {
-    let connection = &mut establish_connection();
-    let kart: Kart = Kart::get_by_number(connection, kart_number);
 
-    let laps = Lap::from_kart(connection, &kart);
-    let drivers = Driver::from_laps(connection, &laps);
-
-
-    let mut template_data = TemplateDataKart {
-        number: kart.number,
-        is_child_kart: kart.is_child_kart.unwrap_or(false),
-        total_laps: laps.len() as i32,
-        total_drivers: drivers.len() as i32,
-        drivers: Vec::new(),
-        lap_drivers: kart.get_laps_driver_and_heat(connection),
-        laps_avg_per_day: kart.get_laps_avg_per_day(connection),
-        laps_min_per_day: kart.get_minimum_laptime_per_day(connection),
-        laps_median_per_day: kart.get_median_laptime_per_day(connection),
-    };
-
-    // get stats for each driver
-    for driver in &drivers {
-        template_data.drivers.push(DriverHelpers::get_stats_for_laps(connection, driver, &laps));
-    }
-
-    Template::render("kart", context! {
-        data: &template_data,
-        json_data: serde_json::to_string(&template_data).unwrap(),
-    })
-}
-
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize,  Clone)]
 struct TemplateDataKart {
     pub number: i32,
     pub is_child_kart: bool,
     pub total_laps: i32,
     pub total_drivers: i32,
-
-    pub drivers: Vec<TemplateDataDriver>,
-    pub lap_drivers: Vec<LapDriver>,
-    pub laps_avg_per_day: HashMap<NaiveDate, f64>,
-    pub laps_min_per_day: HashMap<NaiveDate, f64>,
-    pub laps_median_per_day: HashMap<NaiveDate, f64>,
+    pub table_data: TableData,
+    pub chart_data: ChartData,
 }

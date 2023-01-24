@@ -1,26 +1,36 @@
+use crate::modules::helpers::handelbars::format_is_child_kart::check_param_count;
 use chrono::NaiveDateTime;
-use rocket_dyn_templates::handlebars::{Handlebars, HelperDef, RenderContext, Helper, Context, HelperResult, Output};
+use rocket_dyn_templates::handlebars::{
+    Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext,
+};
 
-
+/// # date formatting helper
+/// a helper to correctly format a date in the frontend
+///
+/// ### usage
+/// ```handlebars
+/// {{formatDate "2021-01-01T00:00:00Z"}}
+/// ```
 #[derive(Clone, Copy)]
 pub struct FormatDateHelper;
 
 impl HelperDef for FormatDateHelper {
     fn call<'reg: 'rc, 'rc>(
         &self,
-        h: &Helper, _: &Handlebars, _: &Context,
+        helper: &Helper,
+        _: &Handlebars,
+        _: &Context,
         _: &mut RenderContext,
-        out: &mut dyn Output) -> HelperResult {
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        check_param_count(helper, 1)?;
+        let date_param = helper.param(0);
+        // get the string value
 
-        let date_param = h.param(0);
+        let date: Result<NaiveDateTime, _> =
+            serde_json::from_value(date_param.unwrap().value().clone());
 
-        if date_param.is_none() {
-            return Ok(());
-        }
-
-        let date: NaiveDateTime = serde_json::from_value(date_param.unwrap().value().clone()).unwrap();
-        out.write(&format!("{}", date.format("%A %e %B %Y, %H:%M")))?;
-
+        out.write(&format!("{}", date.unwrap().format("%A %e %B %Y, %H:%M")))?;
         Ok(())
     }
 }

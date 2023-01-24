@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    {{> common/script_blocks/chart }}
+    {{> common/script_blocks/sortable_tables }}
+    {{> common/script_blocks/tailwind }}
+
+    <title>Kart {{number}} </title>
+</head>
+<body class=" dark:bg-gray-800 dark:text-gray-50">
+{{> common/components/navbar }}
+<article class="max-w-6xl px-6 py-24 mx-auto space-y-16 dark:bg-gray-800 dark:text-gray-50">
+    <div class="w-full mx-auto space-y-4">
+        <h1 class="text-5xl font-bold leading-none">
+            Kart: {{number}}
+        </h1>
+        {{formatChildKart is_child_kart}}
+    </div>
+    <div class="w-full mx-auto space-y-4">
+        <h2 class="text-3xl font-bold dark:text-white">
+            Lap Times
+        </h2>
+
+        <p class="dark:text-gray-100">
+            The following table gives an overview of all lap times driven in the kart. <br>
+            it shows a chart of all laps but also of the filtered lap times.
+            filtering has been doen by removing all laps slower than the mean time + standard deviation
+        </p>
+        <canvas id="chart-0" width="" height=""></canvas>
+    </div>
+
+    <div class="w-full mx-auto space-y-4">
+        <h2 class="text-3xl font-bold dark:text-white">
+            All Laps
+        </h2>
+        <div class="chart-multiple">
+            <p class="mb-6">
+                the following charts give an overview of all laps driven in the kart.
+                this data is represented in a chronological order.
+                this can give an indication of when a kart has been serviced and what its potential laptimes are.
+                the data is taken from all laps including slow laps.
+            </p>
+            <div class="chart">
+                <p class="chart-text">
+                    The following chart shows all laps.
+                    The change in colour indicates a different driver driving in the kart
+                </p>
+                <canvas id="chart-1"></canvas>
+            </div>
+
+            <div class="chart">
+                <p class="chart-text">
+                    the following shows the average, minimum and median
+                </p>
+                <canvas id="chart-2"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="w-full mx-auto space-y-4">
+        <h2 class="text-4xl font-bold dark:text-white">
+            Drivers
+        </h2>
+        The following table show the name of all drivers and the general stats of them in the specific kart
+        <table class="w-full text-sm text-left text-gray-500 dark:text-gray-400 sortable">
+            <thead class="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
+            <tr>
+                {{#each table_data.headers as |header|}}
+                    <th scope="col" class="px-6 py-3">
+                        {{header}}
+                    </th>
+                {{/each}}
+            </tr>
+            </thead>
+            <tbody>
+
+            {{#each table_data.rows as |row|}}
+                <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700">
+                {{#each row as |data|}}
+                    <th scope="row" class="px-6 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white">
+                        {{{data}}}
+                    </th>
+                {{/each}}
+                </tr>
+            {{/each}}
+            </tbody>
+        </table>
+    </div>
+</article>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/@sgratzl/chartjs-chart-boxplot@4.1.0/build/index.umd.min.js"></script>
+
+<script src="/static/js/heats/allLapTimesPlot.js"></script>
+<script src="/static/js/heats/allKartLapChart.js"></script>
+<script src="/static/js/heats/timeLineChart.js"></script>
+
+<script>
+    const data = JSON.parse(`{{{ toJson chart_data }}}`);
+
+
+    const violinChartCanvas = document.getElementById(`chart-0`);
+    const allLapsCanvas = document.getElementById('chart-1');
+    const timeLineAvgCanvas = document.getElementById('chart-2')
+
+    const violinChart = createLapTimeViolinChart(data, violinChartCanvas);
+    const lineChart = createAllKartLapChart(data, allLapsCanvas);
+    const lineTimescaleRawData = timeLineChart(data, timeLineAvgCanvas);
+</script>
+</body>
+</html>

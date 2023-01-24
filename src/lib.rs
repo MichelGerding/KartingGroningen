@@ -1,24 +1,38 @@
-use serde::{Serialize, Deserialize};
+use crate::modules::models::driver::Driver;
+use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 
-pub mod models;
-
-pub mod schema;
+pub mod errors;
 pub mod modules;
-pub mod routes {
-    pub mod heat;
-    pub mod kart;
+pub mod schema;
+pub mod cron_jobs;
+
+pub mod macros {
+    // pub mod macros;
+    pub mod request_caching;
 }
 
+pub mod routes {
+    pub mod driver;
+    pub mod heat;
+    pub mod kart;
 
+    pub mod api {
+        pub mod driver;
+        pub mod heat;
+        pub mod kart;
+    }
+}
 
-
-#[derive(Clone, Serialize, PartialEq, Deserialize, Debug)]
-pub struct TemplateData {
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TemplateDataHeat {
     pub heat_id: String,
     pub heat_type: String,
     pub start_date: chrono::NaiveDateTime,
-    pub drivers: Vec<TemplateDataDriver>,
+    pub chart_data: ChartData,
+    pub table_data: TableData,
 }
+
 #[derive(Clone, Serialize, PartialEq, Deserialize, Debug)]
 pub struct TemplateDataDriver {
     pub driver_name: String,
@@ -35,4 +49,42 @@ pub struct TemplateDataDriver {
 pub struct TemplateDataLap {
     pub lap_in_heat: i32,
     pub lap_time: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ChartData {
+    pub labels: Vec<String>,
+    pub datasets: Vec<ChartDataDataset>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ChartDataDataset {
+    pub label: String,
+    pub data: Vec<ChartDataDataSetData>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct ChartDataDataSetData {
+    pub date: Option<NaiveDate>,
+    pub driver: Option<Driver>,
+    pub lap_time: f64,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AllData {
+    pub data_type: String,
+    pub table_data: TableData,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct TableData {
+    pub headers: Vec<String>,
+    pub rows: Vec<Vec<String>>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct AllDataWithCharts {
+    pub data_type: String,
+    pub chart_data: ChartData,
+    pub table_data: TableData,
 }

@@ -4,7 +4,6 @@ diesel::table! {
     drivers (id) {
         id -> Int4,
         name -> Varchar,
-        fastest_lap -> Nullable<Int4>,
     }
 }
 
@@ -21,7 +20,7 @@ diesel::table! {
     karts (id) {
         id -> Int4,
         number -> Int4,
-        is_child_kart -> Nullable<Bool>,
+        is_child_kart -> Bool,
     }
 }
 
@@ -39,9 +38,4 @@ diesel::table! {
 diesel::joinable!(laps -> heats (heat));
 diesel::joinable!(laps -> karts (kart_id));
 
-diesel::allow_tables_to_appear_in_same_query!(
-    drivers,
-    heats,
-    karts,
-    laps,
-);
+diesel::allow_tables_to_appear_in_same_query!(drivers, heats, karts, laps,);
