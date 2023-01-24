@@ -35,7 +35,7 @@ pub fn list_all(origin: &Origin) -> Template {
     let uri = origin.path().to_string();
 
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+    if Redis::has_data(r_conn, uri.clone()).unwrap() && false {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         let connection: &mut PgConnection = &mut establish_connection();
@@ -71,21 +71,19 @@ pub fn list_all(origin: &Origin) -> Template {
         let kart_stats: HashMap<Kart, Vec<KartStatsPerDay>> =
             Kart::get_stats_per_day_from_db(connection);
 
+        dbg!(&kart_stats.len());
 
         let datasets: Vec<ChartDataDataset> = kart_stats
             .iter()
             .map(|(kart, stats)| {
+                let min_per_day: HashMap<NaiveDate, f64> = stats
+                    .iter()
+                    .map(|stat| (stat.start_date.date(), stat.min_laptime))
+                    .collect();
+
                 ChartDataDataset {
                     label: kart.number.to_string(),
-                    data: stats.iter()
-                        .map(|stat| {
-                            ChartDataDataSetData {
-                                date: Some(stat.start_date.date()),
-                                driver: None,
-                                lap_time: stat.min_laptime,
-                            }
-                        })
-                        .collect(),
+                    data: list_to_chart_data_set_without_driver(min_per_day.iter()),
                 }
             })
             .collect();
@@ -247,9 +245,10 @@ fn list_to_chart_data_set(
 
             date: Some(heats_hash_map.get(&x.heat).unwrap().start_date.date()),
             driver:
-                drivers_hash_map
-                    .get(&x.driver)
-                    .copied(),
+            Some(drivers_hash_map
+                .get(&x.driver)
+                .unwrap()
+                .clone()),
             lap_time: x.lap_time,
         })
         .collect()

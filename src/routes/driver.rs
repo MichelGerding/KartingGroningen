@@ -108,10 +108,11 @@ pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> 
         let laps_per_heat = Heat::get_laps_per_heat(&heats, &laps);
 
         for (heat, laps) in laps_per_heat {
-            let kart = karts.clone()
+            let kart = karts[..]
                 .iter()
                 .find(|e| e.id == laps[0].kart_id)
                 .unwrap();
+
             let laps_statistics = Lap::get_stats_of_laps(&laps);
 
             let fastest_lap: Lap =

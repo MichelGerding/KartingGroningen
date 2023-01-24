@@ -28,7 +28,9 @@
         <p class="dark:text-gray-100">
             The following table gives an overview of all lap times driven in the kart. <br>
             it shows a chart of all laps but also of the filtered lap times.
-            filtering has been doen by removing all laps slower than the mean time + standard deviation
+            filtering has been done by removing all laps slower than the mean time + standard deviation
+            <br><br>
+            zooming is enabled by using ctrl + scroll
         </p>
         <canvas id="chart-0" width="" height=""></canvas>
     </div>
@@ -44,17 +46,26 @@
                 this can give an indication of when a kart has been serviced and what its potential laptimes are.
                 the data is taken from all laps including slow laps.
             </p>
+
+
             <div class="chart">
                 <p class="chart-text">
                     The following chart shows all laps.
                     The change in colour indicates a different driver driving in the kart
+                    <br><br>
+                    zooming is enabled by using ctrl + scroll
                 </p>
                 <canvas id="chart-1"></canvas>
-            </div>
 
+            </div>
+            <h3 class="text-xl font-bold dark:text-white">
+                Stats Per day
+            </h3>
             <div class="chart">
                 <p class="chart-text">
-                    the following shows the average, minimum and median
+                    the following shows the average, minimum and median laptimes per day.
+                    <br><br>
+                    zooming is enabled by using ctrl + scroll
                 </p>
                 <canvas id="chart-2"></canvas>
             </div>

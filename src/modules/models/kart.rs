@@ -526,7 +526,7 @@ pub struct KartStats {
     pub driver_count: i32,
 }
 
-#[derive(QueryableByName)]
+#[derive(QueryableByName, Debug)]
 pub struct KartStatsPerDay {
     #[diesel(sql_type = Integer)]
     pub id: i32,
