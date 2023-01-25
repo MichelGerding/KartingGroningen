@@ -35,7 +35,7 @@ pub fn list_all(origin: &Origin) -> Template {
     let uri = origin.path().to_string();
 
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() && false {
+    if Redis::has_data(r_conn, uri.clone()).unwrap() {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         let connection: &mut PgConnection = &mut establish_connection();

@@ -25,7 +25,14 @@ pub async fn get_heats_from_api(heat_ids: Vec<String>) -> Vec<WebResponse> {
 
     let mut heats: Vec<WebResponse> = Vec::new();
     while let Some(heat) = tasks.join_next().await {
-        heats.push(heat.unwrap());
+        let heat_result = match heat.unwrap() {
+            Ok(heat) => heat,
+            Err(err) => {
+                warn!("Error: {}", err);
+                continue;
+            }
+        };
+        heats.push(heat_result);
     }
 
     heats
@@ -51,7 +58,7 @@ pub async fn get_todays_heats_from_api() -> Vec<String> {
     heats
 }
 
-pub async fn get_heat_from_api(heat_id: String) -> WebResponse {
+pub async fn get_heat_from_api(heat_id: String) -> serde_json::Result<WebResponse> {
     info!(target: "querying_heat", "Getting heat {} from api", heat_id);
     let request_url =
         format!("http://reserveren.kartbaangroningen.nl/GetHeatResults.ashx?heat={heat_id}");
@@ -62,7 +69,7 @@ pub async fn get_heat_from_api(heat_id: String) -> WebResponse {
     // clean response string
     let mut body_cleaned = body.replace('(', "");
     body_cleaned = body_cleaned.replace(");", "");
-    serde_json::from_str(&body_cleaned).unwrap()
+    serde_json::from_str(&body_cleaned)
 }
 
 pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> Result<String, AlreadyExistsError> {
