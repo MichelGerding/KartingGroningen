@@ -8,7 +8,6 @@ pub mod schema;
 pub mod cron_jobs;
 
 pub mod macros {
-    // pub mod macros;
     pub mod request_caching;
 }
 

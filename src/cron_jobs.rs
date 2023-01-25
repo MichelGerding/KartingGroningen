@@ -12,7 +12,13 @@ async fn load_heats() {
 
     for heat_id in heat_list {
         tasks.spawn(async move {
-            let heat = get_heat_from_api(heat_id).await;
+            let heat = match get_heat_from_api(heat_id).await {
+                Ok(heat) => heat,
+                Err(err) => {
+                    println!("Error: {}", err);
+                    return;
+                }
+            };
 
             let con = &mut establish_connection();
             save_heat(con, heat).expect("failed to save heat");

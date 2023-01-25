@@ -101,3 +101,5 @@ async fn rocket() -> Rocket<Build> {
 //TODO:: add caching to all db queries
 //TODO:: lower the amount of data required to show the pages
 //TODO:: add ranking to the drivers
+//TODO:: add propper logging
+//TODO:: add support for different tracks
