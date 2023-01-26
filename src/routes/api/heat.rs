@@ -39,7 +39,10 @@ use crate::macros::request_caching::{cache_response, read_cache_request};
 pub async fn save_one(new_heat: Form<NewHeatFormData>) -> Result<Flash<Redirect>, Status> {
     let sanitized = sanitize_name(&new_heat.heat_id);
     if sanitized != new_heat.heat_id {
-        return Err(Status::BadRequest);
+        return Ok(Flash::error(
+            Redirect::to("/"),
+            format!("|Invalid heat id: {}", new_heat.heat_id),
+        ));
     }
 
 
@@ -48,13 +51,17 @@ pub async fn save_one(new_heat: Form<NewHeatFormData>) -> Result<Flash<Redirect>
     let heat = new_heat.into_inner().heat_id;
     let response = get_heats_from_api(vec![heat]).await;
     if response.len() == 0 {
-        return Ok(Flash::success(Redirect::to(format!("/", )), "Heat not found"));
+        return Ok(Flash::warning(
+            Redirect::to(format!("/", )),
+            "|Heat not found"));
     }
 
     let heat: WebResponse = response[0].clone();
     let heat_id = save_heat(conn, heat).unwrap();
 
-    Ok(Flash::success(Redirect::to(format!("/heats/{}", heat_id)), "Heat saved"))
+    Ok(Flash::success(
+        Redirect::to(format!("/heats/{}", heat_id)),
+        "Heat saved"))
 }
 
 #[post("/heats/delete/<heat_id>")]

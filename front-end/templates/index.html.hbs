@@ -108,5 +108,14 @@
     </div>
 </main>
 
+<script src="https://cdn.jsdelivr.net/npm/js-cookie@3.0.1/dist/js.cookie.min.js"></script>
+<script>
+    // show alert if there was a error
+    let flash = Cookies.get("_flash");
+    if (flash) {
+        alert(flash.split('|')[1])
+    }
+
+</script>
 </body>
 </html>

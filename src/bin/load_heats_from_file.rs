@@ -1,4 +1,5 @@
 use dotenvy::dotenv;
+use karting_groningen_analytics::errors::AlreadyExistsError;
 
 use karting_groningen_analytics::modules::heat_api::{get_heat_from_api, save_heat};
 use karting_groningen_analytics::modules::helpers::heat::HeatsHelper;
@@ -19,8 +20,22 @@ async fn main() {
     // let heats: Vec<WebResponse> = get_heats_from_api(heat_list).await;
 
     for heat_id in heat_list {
-        let heat = get_heat_from_api(heat_id).await;
+        match get_heat_from_api(heat_id).await {
+            Ok(heat) => {
+                match save_heat(connection, heat) {
+                    Ok(_) => {
+                        //TODO:: log and notify of addition
+                    }
+                    Err(err) => {
+                        println!("Error: {}", err)
+                    }
+                };
+            }
+            Err(err) => {
+                println!("Error: {}", err);
+                return;
+            }
+        };
 
-        save_heat(connection, heat).expect("error saving heat");
     }
 }
