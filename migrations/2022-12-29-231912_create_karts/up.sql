@@ -2,7 +2,7 @@ create table public.Karts
 (
     "id"            INT GENERATED ALWAYS AS IDENTITY,
     "number"        int not null UNIQUE ,
-    "is_child_kart"   boolean DEFAULT false,
+    "is_child_kart"   boolean not null DEFAULT false,
 
     PRIMARY KEY ("id")
 );
