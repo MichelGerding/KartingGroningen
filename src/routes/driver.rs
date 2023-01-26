@@ -43,6 +43,7 @@ pub fn list_all(origin: &Origin) -> Template {
                     "Median Laptime".to_string(),
                     "Total Laps".to_string(),
                     "Total Heats".to_string(),
+                    "Rating".to_string(),
                     "".to_string(),
                 ],
                 rows: driver_stats
@@ -54,6 +55,7 @@ pub fn list_all(origin: &Origin) -> Template {
                             Math::round_float_to_n_decimals(stats.median_lap_time, 2).to_string(),
                             stats.total_laps.to_string(),
                             stats.total_heats.to_string(),
+                            Math::round_float_to_n_decimals(stats.rating, 2).to_string(),
                         ]
                     })
                     .collect(),

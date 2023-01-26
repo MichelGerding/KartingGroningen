@@ -194,6 +194,7 @@ pub struct NewHeatFormData {
 #[derive(Serialize, Deserialize, Clone, JsonResponse)]
 pub struct ApiDriver {
     pub name: String,
+    pub rating: f64,
     pub heats: Vec<ApiHeat>,
 }
 
@@ -210,6 +211,7 @@ impl ApiDriver {
     pub fn new(driver: &Driver, heats: &[Heat], laps: &[Lap], karts: &[Kart]) -> ApiDriver {
         ApiDriver {
             name: driver.name.to_string(),
+            rating: driver.rating,
             heats: heats
                 .iter()
                 .map(|heat| {

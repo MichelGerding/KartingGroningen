@@ -31,7 +31,7 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
-
+use skillratings::weng_lin::WengLinRating;
 
 
 trait IdentifiableAsMap {
@@ -42,12 +42,16 @@ trait IdentifiableAsMap {
 #[diesel(table_name = drivers)]
 pub struct NewDriver {
     pub name: String,
+    pub rating: f64,
+    pub uncertainty: f64,
 }
 
 #[derive(Queryable, Serialize, Identifiable, Debug, Clone, Deserialize, HasId)]
 pub struct Driver {
     pub id: i32,
     pub name: String,
+    pub rating: f64,
+    pub uncertainty: f64,
 }
 
 impl Hash for Driver {
@@ -79,6 +83,8 @@ impl Driver {
         let sanitized_name = sanitize_name(name);
         let new_driver = NewDriver {
             name: sanitized_name.to_string(),
+            rating: 25.0,
+            uncertainty: 25.0/3.0,
         };
 
         let driver: Driver = diesel::insert_into(drivers::table)
@@ -140,6 +146,7 @@ impl Driver {
         match sql_query(format!("
             select
                 d.name,
+                d.rating,
                 min(l.lap_time) as fastest_lap_time,
                 avg(l.lap_time) as avg_lap_time,
                 percentile_cont(0.5) WITHIN GROUP ( ORDER BY l.lap_time) as median_lap_time,
@@ -148,7 +155,7 @@ impl Driver {
             from drivers d
                      inner join laps l on d.id = l.driver
             where d.name like '%{}%'
-            GROUP BY d.name
+            GROUP BY d.name, d.rating
             limit {} offset {}",
             driver_name,
             page_size,
@@ -166,6 +173,7 @@ impl Driver {
         match sql_query(format!("
             select
                 d.name,
+                d.rating,
                 min(l.lap_time) as fastest_lap_time,
                 avg(l.lap_time) as avg_lap_time,
                 percentile_cont(0.5) WITHIN GROUP ( ORDER BY l.lap_time) as median_lap_time,
@@ -174,7 +182,7 @@ impl Driver {
             from drivers d
             inner join laps l on d.id = l.driver
             where d.name like '%{}%'
-            GROUP BY d.name;",
+            GROUP BY d.name, d.rating;",
             driver_name
         ))
         .load::<DriverStats>(conn)
@@ -202,6 +210,7 @@ impl Driver {
             "
             select
                 d.name,
+                d.rating,
                 min(l.lap_time) as fastest_lap_time,
                 avg(l.lap_time) as avg_lap_time,
                 percentile_cont(0.5) WITHIN GROUP ( ORDER BY l.lap_time) as median_lap_time,
@@ -209,7 +218,7 @@ impl Driver {
                 CAST(count(DISTINCT l.heat) AS INT) as total_heats
             from drivers d
             inner join laps l on d.id = l.driver
-            GROUP BY d.name;",
+            GROUP BY d.name, d.rating;",
         )
             .load::<DriverStats>(conn)
         .expect("Error loading driver stats")
@@ -232,6 +241,7 @@ impl Driver {
             "
             select
                 d.name,
+                d.rating,
                 min(l.lap_time) as fastest_lap_time,
                 avg(l.lap_time) as avg_lap_time,
                 percentile_cont(0.5) WITHIN GROUP ( ORDER BY l.lap_time) as median_lap_time,
@@ -240,7 +250,7 @@ impl Driver {
             from drivers d
             inner join laps l on d.id = l.driver
             where d.name = '{}'
-            GROUP BY d.name;",
+            GROUP BY d.name, d.rating;",
             driver_name
         ))
         .get_result::<DriverStats>(conn)
@@ -310,6 +320,7 @@ impl Driver {
             "
             select
                 d.name,
+                d.rating,
                 min(l.lap_time) as fastest_lap_time,
                 avg(l.lap_time) as avg_lap_time,
                 percentile_cont(0.5) WITHIN GROUP ( ORDER BY l.lap_time) as median_lap_time,
@@ -318,7 +329,7 @@ impl Driver {
             from drivers d
             inner join laps l on d.id = l.driver
             where d.id = $1
-            GROUP BY d.name;",
+            GROUP BY d.name, d.rating;",
         )
         .bind::<Integer, _>(self.id)
         .get_result::<DriverStats>(conn)
@@ -458,6 +469,8 @@ impl Driver {
     pub fn to_new(&self) -> NewDriver {
         NewDriver {
             name: self.name.clone(),
+            rating: self.rating,
+            uncertainty: self.uncertainty,
         }
     }
 
@@ -499,6 +512,7 @@ impl Driver {
             median_lap_time: lap_stats.median_lap_time,
             total_laps: correct_laps.len() as i32,
             total_heats: heat_count as i32,
+            rating: self.rating,
         }
     }
 
@@ -622,6 +636,35 @@ impl Driver {
         }
     }
 
+    /// # set the rating of a player to a new value
+    /// this function sets the rating of a player to a new value
+    /// the player that is being updated is the player whose id is given
+    ///
+    /// ## Arguments
+    /// * `conn` - the database connection
+    /// * `driver_id` - the id of the driver
+    /// * `new_rating` - the new rating
+    pub fn set_rating_id(conn: &mut PgConnection, driver_id: i32, new_rating: WengLinRating) {
+        diesel::update(drivers::table)
+            .filter(drivers::id.eq(driver_id))
+            .set((
+                drivers::rating.eq(new_rating.rating),
+                drivers::uncertainty.eq(new_rating.uncertainty),
+            ))
+            .execute(conn)
+            .unwrap();
+    }
+
+    /// # set new skill ratings for the current player
+    /// calls the fuction `set_rating_id` with the current driver
+    ///
+    /// ## Arguments
+    /// * `conn` - the database connection
+    /// * `new_rating` - the new rating
+    pub fn set_rating(&self, conn: &mut PgConnection, new_rating: WengLinRating) {
+        Driver::set_rating_id(conn, self.id, new_rating);
+    }
+
 }
 
 /// # sanitize name
@@ -633,7 +676,7 @@ impl Driver {
 /// ## Returns
 /// * `String` - the sanitized name
 pub fn sanitize_name(name: &str) -> String {
-    let email_regex = Regex::new(r#"(?:[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)\])"#).unwrap();
+    let email_regex = Regex::new(r#"(?:[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_`{|}~-]+)*|"(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21\x23-\x5b\x5d-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])*")@(?:(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?|\[(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?|[a-z0-9-]*[a-z0-9]:(?:[\x01-\x08\x0b\x0c\x0e-\x1f\x21-\x5a\x53-\x7f]|\\[\x01-\x09\x0b\x0c\x0e-\x7f])+)])"#).unwrap();
     let disallowed_chars = [
         '(', ')', '[', ']', '{', '}', '<', '>', ';', ':', ',', '/', '\\', '"', '`', '~', '!', '@',
         '#', '$', '%', '^', '&', '*', '+', '=', '?', '|', '_'
@@ -664,4 +707,6 @@ pub struct DriverStats {
     pub total_laps: i32,
     #[diesel(sql_type = Integer)]
     pub total_heats: i32,
+    #[diesel(sql_type = Double)]
+    pub rating: f64,
 }

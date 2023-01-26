@@ -4,6 +4,8 @@ diesel::table! {
     drivers (id) {
         id -> Int4,
         name -> Varchar,
+        rating -> Float8,
+        uncertainty -> Float8,
     }
 }
 
@@ -35,7 +37,13 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(laps -> drivers (driver));
 diesel::joinable!(laps -> heats (heat));
 diesel::joinable!(laps -> karts (kart_id));
 
-diesel::allow_tables_to_appear_in_same_query!(drivers, heats, karts, laps,);
+diesel::allow_tables_to_appear_in_same_query!(
+    drivers,
+    heats,
+    karts,
+    laps,
+);

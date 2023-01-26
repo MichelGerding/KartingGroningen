@@ -24,6 +24,8 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
+use skillratings::MultiTeamOutcome;
+use skillratings::weng_lin::{weng_lin_multi_team, WengLinConfig, WengLinRating};
 
 
 #[derive(Insertable, Serialize, Debug, Clone, Deserialize)]
@@ -577,6 +579,61 @@ impl Heat {
         }
 
         heat_laps_map
+    }
+
+
+    pub fn apply_ratings(&self, connection: &mut PgConnection) {
+        #[derive(QueryableByName, Debug)]
+        struct LocalRating {
+            #[diesel(sql_type = Integer)]
+            id: i32,
+            #[diesel(sql_type = Double)]
+            rating: f64,
+            #[diesel(sql_type = Double)]
+            uncertainty: f64,
+        }
+
+        // get the order the drivers finished in the heat
+        let drivers: Vec<LocalRating> = sql_query(format!("
+            SELECT d.id, d.rating, d.uncertainty from drivers d
+                inner join laps l on d.id = l.driver
+                inner join heats h on l.heat = h.id
+            where heat_id = '{}'
+            group by d.id
+            order by min(l.lap_time) asc
+        ", self.heat_id))
+            .load::<LocalRating>(connection)
+            .unwrap();
+
+        println!("drivers: {:?}", drivers);
+
+        let teams: Vec<Vec<WengLinRating>> = drivers
+            .iter()
+            .map(|driver| {
+                return vec![WengLinRating {
+                    rating: driver.rating,
+                    uncertainty: driver.uncertainty
+                }]
+            }).collect();
+
+        // create the ratingh groups
+        let mut rating_groups = Vec::new();
+        for (position, _) in drivers.iter().enumerate() {
+            let result = MultiTeamOutcome::new(position + 1);
+
+            rating_groups.push((
+                &(teams[position])[..],
+                result
+                ));
+        }
+
+        let new_ratings = weng_lin_multi_team(&rating_groups[..], &WengLinConfig::default());
+        for (position, driver) in drivers.iter().enumerate() {
+            let new_rating = &new_ratings[position];
+            println!("{}: {} -> {}", driver.id, driver.rating, new_rating[0].rating);
+            Driver::set_rating_id(connection, driver.id, new_rating[0]);
+
+        }
     }
 }
 

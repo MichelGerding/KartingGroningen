@@ -42,6 +42,8 @@ impl HelperDef for Format {
 
         if dt.is_ok() {
             out.write(&format!("{}", dt.unwrap().format("%A %e %B %Y, %H:%M")))?;
+        } else if a.starts_with('-') {
+            out.write(a)?;
         } else {
             out.write(&*a.to_title_case())?;
         }
