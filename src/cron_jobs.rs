@@ -2,7 +2,7 @@ use std::time::Duration;
 use log::{info, warn};
 use tokio::task::JoinSet;
 use tokio_cron_scheduler::{Job, JobScheduler};
-use crate::errors::{CustomResult, Error};
+use crate::errors::{Error};
 
 
 use crate::modules::heat_api::{get_heat_from_api, get_todays_heats_from_api, save_heat};
@@ -19,7 +19,7 @@ pub async fn load_todays_heats() {
             let heat = match get_heat_from_api(heat_id).await {
                 Ok(heat) => heat,
                 Err(err) => {
-                    warn!(target:"load_todays_heats", "failed loading heat from api. (heat_id: {})", err);
+                    warn!(target:"cron_jobs:load_todays_heats", "failed loading heat from api. (heat_id: {})", err);
                     return;
                 }
             };
@@ -27,13 +27,13 @@ pub async fn load_todays_heats() {
             let con = &mut establish_connection();
             match save_heat(con, heat.clone()) {
                 Ok(heat_id) => {
-                    info!(target:"load_todays_heats", "saved heat: {}", heat_id);
+                    info!(target:"cron_jobs:load_todays_heats", "saved heat: {}", heat_id);
                 }
                 Err(Error::AlreadyExistsError{ .. }) => {
-                    info!(target:"load_todays_heats", "heat already exists: {}", heat.heat.id);
+                    info!(target:"cron_jobs:load_todays_heats", "heat already exists: {}", heat.heat.id);
                 }
                 Err(Error::InvalidNameError{ .. }) => {
-                    warn!(target:"load_todays_heats", "invalid driver names in heat {}", heat.heat.id);
+                    warn!(target:"cron_jobs:load_todays_heats", "invalid driver names in heat {}", heat.heat.id);
                 }
                 _ => {}
             };

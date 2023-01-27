@@ -1,9 +1,10 @@
 // Datatypes
 use chrono::NaiveDate;
-use diesel::PgConnection;
+use diesel::{PgConnection};
 use std::collections::hash_map::Iter;
 use std::collections::HashMap;
 use std::thread;
+use log::error;
 // Rocket imports
 use rocket::get;
 use rocket::http::Status;
@@ -13,6 +14,8 @@ use rocket_dyn_templates::{Template};
 use serde::{Deserialize, Serialize};
 // Templating imports
 use crate::{AllDataWithCharts, ChartData, ChartDataDataSetData, ChartDataDataset, TableData};
+use crate::macros::database_error_handeler::db_handle_get_error_http;
+use crate::macros::redis::{cache_data_to_url,  redis_handle_set_error_no_return};
 // Database imports
 use crate::modules::models::driver::Driver;
 use crate::modules::models::general::establish_connection;
@@ -22,20 +25,28 @@ use crate::modules::models::lap::Lap;
 use crate::modules::redis::Redis;
 
 #[get("/all")]
-pub fn list_all(origin: &Origin) -> Template {
+pub fn list_all(origin: &Origin) -> Result<Template, Status> {
+    let r_conn_m = &mut Redis::connect();
+    if r_conn_m.is_err() {
+        error!(target:"routes/kart:single", "Error connecting to redis");
+        return Err(Status::InternalServerError);
+    }
+    let r_conn = &mut r_conn_m.as_mut().unwrap();
 
-    //TODO:: optimize to no longer need all laps
 
-    // get all karts and all laps
-    // we get all laps because we want to get some basic information of the kart.
-    // because we show all karts we need to also get all the laps because all laps have a kart
-
-
-    let r_conn = &mut Redis::connect();
     let uri = origin.path().to_string();
 
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+
+    let has_data = match Redis::has_data(r_conn, uri.clone()) {
+        Ok(b) => b,
+        Err(error) => {
+            error!(target:"routes/driver:list_all", "Error checking redis for data: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
+
+    if has_data {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         let connection: &mut PgConnection = &mut establish_connection();
@@ -71,8 +82,6 @@ pub fn list_all(origin: &Origin) -> Template {
         let kart_stats: HashMap<Kart, Vec<KartStatsPerDay>> =
             Kart::get_stats_per_day_from_db(connection);
 
-        dbg!(&kart_stats.len());
-
         let datasets: Vec<ChartDataDataset> = kart_stats
             .iter()
             .map(|(kart, stats)| {
@@ -106,29 +115,36 @@ pub fn list_all(origin: &Origin) -> Template {
             },
         };
 
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
+        cache_data_to_url!(all_data, uri, "routes/kart:list_all");
     }
     // return the template and the data needed to render it
-    Template::render(
+    Ok(Template::render(
         "all",
         all_data,
-    )
+    ))
 }
 
 #[get("/<kart_number>")]
 pub fn single(kart_number: i32, origin: &Origin) -> Result<Template, Status> {
-
-    let r_conn = &mut Redis::connect();
-    let uri = origin.path().to_string();
+    let r_conn_m = &mut Redis::connect();
+    if r_conn_m.is_err() {
+        error!(target:"routes/kart:single", "Error connecting to redis");
+        return Err(Status::InternalServerError);
+    }
+    let r_conn = &mut r_conn_m.as_mut().unwrap();
 
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+    let uri = origin.path().to_string();
+
+    let has_data = match Redis::has_data(r_conn, uri.clone()) {
+        Ok(b) => b,
+        Err(error) => {
+            error!(target:"routes/driver:list_all", "Error checking redis for data: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
+
+    if has_data {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         let connection = &mut establish_connection();
@@ -140,14 +156,16 @@ pub fn single(kart_number: i32, origin: &Origin) -> Result<Template, Status> {
         };
 
         // get all driven laps drivers and heats of the kart
-        let laps = Lap::from_kart(connection, &kart);
-        let drivers = Driver::from_laps(connection, &laps);
-        let heats = Heat::from_laps(connection, &laps);
+        let laps = db_handle_get_error_http!(Lap::from_kart(connection, &kart), "/routes/kart:single", format!("laps from kart {}", kart_number));
+
+        let heats = db_handle_get_error_http!(Heat::from_laps(connection, &laps), "routes/kart:single", format!("heats from kart {}", kart_number));
+        let drivers =  db_handle_get_error_http!(Driver::from_laps(connection, &laps), "routes/kart:single", format!("drivers from kart {}", kart_number));
+
 
         // get the daily stats of the kart. these are the average, median and minimum laptime.
-        let avg_per_day = kart.get_average_laptime_per_day(connection);
-        let min_per_day = kart.get_minimum_laptime_per_day(connection);
-        let med_per_day = kart.get_median_laptime_per_day(connection);
+        let avg_per_day = db_handle_get_error_http!(kart.get_average_laptime_per_day(connection), "routes/kart:single", " average laptime per day");
+        let min_per_day = db_handle_get_error_http!(kart.get_minimum_laptime_per_day(connection), "routes/kart:single", " minimum laptime per day");
+        let med_per_day = db_handle_get_error_http!(kart.get_median_laptime_per_day(connection), "routes/kart:single", " median laptime per day");
 
         // get all datasets for the charts on the page
         let datasets: Vec<ChartDataDataset> = vec![
@@ -201,13 +219,7 @@ pub fn single(kart_number: i32, origin: &Origin) -> Result<Template, Status> {
                 }
         };
 
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
+        cache_data_to_url!(all_data, uri, "routes/kart:single");
     }
 
     Ok(Template::render(

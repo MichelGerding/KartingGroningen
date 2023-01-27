@@ -1,16 +1,14 @@
-use diesel::PgConnection;
+use diesel::{PgConnection};
 use serde::Deserialize;
 
 use std::fmt::Debug;
-use std::error;
 
 use crate::errors::{CustomResult, Error};
 use crate::modules::models::driver::{sanitize_name, Driver};
 use crate::modules::models::heat::Heat;
 use crate::modules::models::kart::Kart;
 use crate::modules::models::lap::{Lap, NewLap};
-use log::{info, warn};
-use rocket::response::status::Custom;
+use log::{error, info, warn};
 use tokio::task::{JoinSet};
 
 
@@ -61,7 +59,7 @@ pub async fn get_todays_heats_from_api() -> Vec<String> {
 }
 
 pub async fn get_heat_from_api(heat_id: String) -> serde_json::Result<WebResponse> {
-    info!(target: "querying_heat", "Getting heat {} from api", heat_id);
+    info!(target: "modules/heat_api:querying_heat", "Getting heat {} from api", heat_id);
     let request_url =
         format!("http://reserveren.kartbaangroningen.nl/GetHeatResults.ashx?heat={heat_id}");
     let response = reqwest::get(&request_url).await.unwrap();
@@ -103,31 +101,46 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<Str
         }
     }
 
-    let heat_id = Heat::new(conn, &heat.heat.id, &*name, &heat.heat.start_time);
-    for driver in heat.results {
-        let driver_name = sanitize_name(&driver.participation.driver_name);
+    match Heat::new(conn, &heat.heat.id, &*name, &heat.heat.start_time) {
+        Ok(heat_id) => {
+            for driver in heat.results {
+                let driver_name = sanitize_name(&driver.participation.driver_name);
 
-        let driver_id = Driver::ensure_exists(conn, &driver_name);
-        let kart_id = Kart::ensure_exists(conn, driver.result.kart_nr, None);
+                let kart = Kart::ensure_exists(conn, driver.result.kart_nr, None);
+                let driver_id = match Driver::ensure_exists(conn, &driver_name) {
+                    Ok(driver_) => driver_,
+                    Err(err) => {
+                        error!(target: "modules/heat_api:save_heat", "Error ensuring driver({}) exists trying next driver. (err: {})", &driver_name, err);
+                        continue;
+                    }
+                };
 
-        let mut laps: Vec<NewLap> = Vec::new();
+                let mut laps: Vec<NewLap> = Vec::new();
 
-        let mut lap_in_heat = 0;
-        for lap in driver.result.lap_times {
-            lap_in_heat += 1;
-            laps.push(NewLap {
-                heat: heat_id.id,
-                driver: driver_id.id,
-                kart_id: kart_id.id,
-                lap_in_heat: lap_in_heat as i32,
-                lap_time: lap,
-            });
+                let mut lap_in_heat = 0;
+                for lap in driver.result.lap_times {
+                    lap_in_heat += 1;
+                    laps.push(NewLap {
+                        heat: heat_id.id,
+                        driver: driver_id.id,
+                        kart_id: kart.id,
+                        lap_in_heat: lap_in_heat as i32,
+                        lap_time: lap,
+                    });
+                }
+
+                let _ = Lap::insert_bulk(conn, &laps);
+            }
+
+            Ok(heat_id.heat_id)
         }
-
-        Lap::insert_bulk(conn, &laps);
+        Err(error) => {
+            warn!(target: "modules/heat_api:querying_heat", "Error inserting heat. (error: {})", error);
+            Err(Error::DatabaseError {})
+        }
     }
 
-    Ok(heat_id.heat_id)
+
 }
 
 #[derive(Deserialize, Debug)]

@@ -1,32 +1,30 @@
 use std::collections::HashMap;
-use chrono::NaiveDateTime;
 
+use chrono::NaiveDateTime;
+use json_response_derive::JsonResponse;
+use log::{error, info, warn};
+use rocket::{FromForm, get, post};
 use rocket::form::Form;
-use rocket::response::{Flash, Redirect};
-use rocket::{get, post, FromForm};
+use rocket::http::ContentType;
 use rocket::http::Status;
 use rocket::http::uri::Origin;
+use rocket::Request;
+use rocket::response::{Flash, Redirect};
+use rocket::response;
+use rocket::response::Responder;
+use rocket::response::Response;
 use rocket::serde::Deserialize;
 use serde::Serialize;
 
-
+use crate::macros::database_error_handeler::db_handle_get_error_http;
+use crate::macros::request_caching::{cache_response, read_cache_request};
 use crate::modules::heat_api::{get_heats_from_api, save_heat, WebResponse};
 use crate::modules::models::driver::{Driver, sanitize_name};
 use crate::modules::models::general::establish_connection;
 use crate::modules::models::heat::{Heat, HeatStats};
 use crate::modules::models::kart::Kart;
 use crate::modules::models::lap::Lap;
-
 use crate::modules::redis::Redis;
-
-use rocket::response;
-use rocket::Request;
-use rocket::response::Responder;
-use rocket::response::Response;
-use rocket::http::ContentType;
-use json_response_derive::JsonResponse;
-use crate::macros::request_caching::{cache_response, read_cache_request};
-
 
 /**************************************************************************************************/
 /**************** ROUTES **************************************************************************/
@@ -74,14 +72,30 @@ pub async fn delete(heat_id: String) -> Result<Flash<Redirect>, Status> {
     let conn = &mut establish_connection();
 
     match Heat::get_by_id(conn, &heat_id) {
-        Ok(heat) => heat.delete(conn),
-        Err(e) => {
-            println!("Warning!! Tried deleting heat got error: {}", e)
-            /* heat doesnt exist so success */
-        }
-    };
+        Ok(heat) => match heat.delete(conn) {
+            Ok(_) => {
+                info!("Deleted heat: {}", heat_id);
+                Ok(Flash::success(
+                    Redirect::to("/"),
+                    format!("Deleted heat: {}", heat_id)))
+            },
+            Err(e) => {
+                error!(target:"routes/api/heat:delete", "Tried deleting heat got error: {}", e);
+                return Err(Status::InternalServerError);
+            }
+        },
+        Err(diesel::NotFound) => {
+            warn!(target:"routes/api/heat:delete", "Tried deleting heat but it didn't exist");
+            return Ok(Flash::success(
+                Redirect::to("/"),
+                format!("Heat {} deleted", &heat_id)));
 
-    Ok(Flash::success(Redirect::to("/heats/all"), "Heat deleted"))
+        }
+        Err(e) => {
+            error!(target:"routes/api/heat:delete", "Tried deleting heat got error: {}", e);
+            return Err(Status::InternalServerError);
+        }
+    }
 }
 
 #[get("/heats/<heat_id>")]
@@ -94,7 +108,7 @@ pub fn get_one_stats(heat_id: String, origin: &Origin) -> Result<HeatStats, Stat
     read_cache_request!(origin);
 
     let connection = &mut establish_connection();
-    let heat = Heat::get_with_stats(connection, heat_id);
+    let heat = db_handle_get_error_http!(Heat::get_with_stats(connection, heat_id), "/routes/api/heat:get_one_stats", "heat stats");
 
     cache_response!(origin, heat);
 }
@@ -115,9 +129,9 @@ pub fn get_one(heat_id: String, origin: &Origin) -> Result<ApiHeat, Status> {
         Err(_) => return Err(Status::NotFound),
     };
 
-    let laps = heat.get_laps(conn);
-    let drivers = Driver::from_laps(conn, &laps);
-    let karts = Kart::from_laps(conn, &laps);
+    let laps = db_handle_get_error_http!(heat.get_laps(conn), "/routes/api/heat:get_one", "laps");
+    let karts = db_handle_get_error_http!(Kart::from_laps(conn, &laps), "/routes/api/heat:get_one", "karts");
+    let drivers = db_handle_get_error_http!(Driver::from_laps(conn, &laps), "/routes/api/heat:get_one", "drivers");
 
     cache_response!(origin, ApiHeat::new(&heat, &drivers, &laps, &karts));
 }
@@ -135,11 +149,11 @@ pub fn get_all(origin: &Origin) -> Result<String, Status> {
 
     let conn = &mut establish_connection();
 
-    let all_heats = Heat::get_all(conn);
-    let all_laps = Lap::from_heats_as_map(conn, &all_heats);
+    let all_heats = db_handle_get_error_http!(Heat::get_all(conn), "/routes/api/heat:get_all", "heats");
+    let all_laps = db_handle_get_error_http!(Lap::from_heats_as_map(conn, &all_heats), "/routes/api/heat:get_all", "laps from heat as map");
 
-    let all_drivers = Driver::get_all(conn);
-    let all_karts = Kart::get_all(conn);
+    let all_drivers = db_handle_get_error_http!(Driver::get_all(conn), "/routes/api/heat:get_all", "drivers");
+    let all_karts = db_handle_get_error_http!(Kart::get_all(conn), "/routes/api/heat:get_all", "karts");
 
     let api_heats: Vec<ApiHeat> = ApiHeat::bulk_new(&all_heats, all_laps, all_drivers, all_karts);
 
@@ -149,11 +163,11 @@ pub fn get_all(origin: &Origin) -> Result<String, Status> {
 /// # get all heats
 /// get info about all heats.
 #[get("/heats/all")]
-pub fn get_all_ids() -> String {
+pub fn get_all_ids() -> Result<String, Status> {
     let conn = &mut establish_connection();
 
-    let heats = Heat::get_all_with_stats(conn);
-    serde_json::to_string(&heats).unwrap()
+    let heats = db_handle_get_error_http!(Heat::get_all_with_stats(conn) , "/routes/api/heat:get_all_ids", "heats with stats");
+    Ok(serde_json::to_string(&heats).unwrap())
 }
 
 /**************************************************************************************************/
@@ -242,9 +256,7 @@ impl ApiHeat {
             .filter(|e| !e.heat_id.is_empty())
             .collect()
     }
-
 }
-
 
 
 /// # Struct representing a json response for a drivers result in a heat

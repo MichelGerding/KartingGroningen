@@ -1,7 +1,6 @@
 use std::io::ErrorKind::PermissionDenied;
 use std::path::Path;
-use log::Level::Warn;
-use log::{error, warn};
+use log::{warn};
 use crate::errors::{CustomResult, Error};
 
 pub struct HeatsHelper {}
@@ -42,7 +41,7 @@ impl HeatsHelper {
             match line {
                 Ok(line) => heat_list.push(line),
                 Err(error) => {
-                    warn!(target:"load_heat_ids_from_file", "Error reading line: {}", i);
+                    warn!(target:"helpers/heat:load_heat_ids_from_file", "Error reading line: {}. (error: {})", i, error);
                 }
             };
         }

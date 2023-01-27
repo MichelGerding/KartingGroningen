@@ -1,4 +1,5 @@
 use std::thread;
+use log::error;
 // rocket imports
 use rocket::get;
 use rocket::http::Status;
@@ -10,6 +11,8 @@ use crate::modules::helpers::math::Math;
 use crate::{
     AllData, ChartData, ChartDataDataSetData, ChartDataDataset, TableData, TemplateDataHeat,
 };
+use crate::macros::redis::{cache_data_to_url, redis_handle_set_error_no_return};
+use crate::modules::models::driver::sanitize_name;
 // database imports
 use crate::modules::models::general::establish_connection;
 use crate::modules::models::heat::{Heat, HeatDriverInfo};
@@ -17,18 +20,43 @@ use crate::modules::models::lap::Lap;
 use crate::modules::redis::Redis;
 
 #[get("/all")]
-pub fn list_all(origin: &Origin) -> Template {
+pub fn list_all(origin: &Origin) -> Result<Template, Status> {
 
     // check the cache
-    let r_conn = &mut Redis::connect();
-    let uri = origin.path().to_string();
 
+    let r_conn_m = &mut Redis::connect();
+    if r_conn_m.is_err() {
+        error!(target:"routes/heat:list_all", "Error connecting to redis");
+        return Err(Status::InternalServerError);
+    }
+    let r_conn = &mut r_conn_m.as_mut().unwrap();
+
+    let uri = origin.path().to_string();
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+
+
+    let has_data = match Redis::has_data(r_conn, uri.clone()) {
+        Ok(b) => b,
+        Err(error) => {
+            error!(target:"routes/driver:list_all", "Error checking redis for data: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
+
+    if has_data {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
         let connection = &mut establish_connection();
-        let heats = Heat::get_all_with_stats(connection);
+        let heats = match Heat::get_all_with_stats(connection) {
+            Ok(e) => e,
+            Err(diesel::result::Error::NotFound) => {
+                return Err(Status::NotFound);
+            }
+            Err(error) => {
+                error!(target:"routes/heat:all", "Error getting heats: {}", error);
+                return Err(Status::InternalServerError);
+            }
+        };
 
         all_data = AllData {
             data_type: "heats".to_string(),
@@ -56,41 +84,53 @@ pub fn list_all(origin: &Origin) -> Template {
             },
         };
 
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
+        cache_data_to_url!(all_data, uri, "routes/heat:list_all");
     }
-    Template::render(
+    Ok(Template::render(
         "all",
         all_data
-    )
+    ))
 }
 
 #[get("/<heat_id_in>")]
 pub fn single(heat_id_in: String, origin: &Origin) -> Result<Template, Status> {
-    // let sanitized = sanitize_name(&heat_id_in);
-    // if sanitized != heat_id_in {
-    //     return Err(Status::BadRequest)
-    // }
+    let sanitized = sanitize_name(&heat_id_in);
+    if sanitized != heat_id_in {
+        return Err(Status::BadRequest)
+    }
 
-    let r_conn = &mut Redis::connect();
+    let r_conn_m = &mut Redis::connect();
+    if r_conn_m.is_err() {
+        error!(target:"routes/heat:single", "Error connecting to redis");
+        return Err(Status::InternalServerError);
+    }
+    let r_conn = &mut r_conn_m.as_mut().unwrap();
+
     let uri = origin.path().to_string();
-
     let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
+
+    let has_data = match Redis::has_data(r_conn, uri.clone()) {
+        Ok(b) => b,
+        Err(error) => {
+            error!(target:"routes/driver:list_all", "Error checking redis for data: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
+
+    if has_data {
         all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
     } else {
-
-
         let conn = &mut establish_connection();
 
         // get all data needed
         let heat = Heat::get_by_id(conn, &heat_id_in);
-        let heat_info = heat.unwrap().get_full_info(conn);
+        let heat_info = match heat.unwrap().get_full_info(conn) {
+            Ok(heat_info) => heat_info,
+            Err(error) => {
+                error!(target:"routes/heat:single", "Error: {}", error);
+                return Err(Status::InternalServerError);
+            }
+        };
 
         let mut table_rows: Vec<Vec<String>> = Vec::new();
         let mut datasets: Vec<ChartDataDataset> = Vec::new();
@@ -124,13 +164,7 @@ pub fn single(heat_id_in: String, origin: &Origin) -> Result<Template, Status> {
             },
         };
 
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
+        cache_data_to_url!(all_data, uri, "routes/heat:list_all");
     }
 
     Ok(Template::render(

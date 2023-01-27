@@ -4,7 +4,10 @@ use std::thread;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use identifiable_derive::HasId;
+use log::error;
 use serde::{Deserialize, Serialize};
+use crate::macros::database_error_handeler::db_handle_get_error;
+use crate::macros::redis::clear_cache;
 
 use crate::modules::helpers::math::Math;
 use crate::modules::models::driver::Driver;
@@ -52,22 +55,31 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Lap` - The inserted lap
-    pub fn new(conn: &mut PgConnection, new_lap: NewLap) -> Lap {
+    pub fn new(conn: &mut PgConnection, new_lap: NewLap) -> QueryResult<Lap> {
         use crate::schema::laps::dsl::*;
 
-        let lap: Lap = diesel::insert_into(laps)
+        let lap: Lap = match diesel::insert_into(laps)
             .values(&new_lap)
-            .get_result(conn)
-            .expect("Error saving new lap");
+            .get_result::<Lap>(conn) {
+            Ok(lap) => lap,
+            Err(error) => {
+                error!(target:"models/lap:new", "Error inserting new lap: {}", error);
+                return Err(error);
+            }
+        };
 
         let lap_driver = Driver::from_lap(conn, lap.clone());
 
         thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-            lap_driver.clear_cache(r_conn);
+            match lap_driver {
+                Ok(driver_) => clear_cache!(driver_),
+                Err(error) => {
+                    error!(target: "models/lap:new", "Error clearing cache could not get driver: (error: {})", error);
+                }
+            };
         });
 
-        lap
+        Ok(lap)
     }
 
     /// # Insert a new lap into the database
@@ -90,7 +102,7 @@ impl Lap {
         lap_in_heat_in: i32,
         lap_time_in: f64,
         kart_id_in: i32,
-    ) -> Lap {
+    ) -> QueryResult<Lap> {
         Lap::new(conn, NewLap {
             heat: heat_in,
             driver: driver_in,
@@ -109,34 +121,68 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - The inserted laps
-    pub fn insert_bulk(conn: &mut PgConnection, new_laps: &Vec<NewLap>) {
+    pub fn insert_bulk(conn: &mut PgConnection, new_laps: &Vec<NewLap>) -> QueryResult<Vec<Lap>>{
         use crate::schema::laps::dsl::*;
 
-        let inserted_laps = diesel::insert_into(laps)
+        let inserted_laps = match diesel::insert_into(laps)
             .values(new_laps)
-            .get_results::<Lap>(conn)
-            .unwrap();
+            .get_results::<Lap>(conn) {
+            Ok(inserted_laps) => inserted_laps,
+            Err(error) => {
+                error!(target: "models/lap:insert_bulk", "Error inserting laps: (error: {})", error);
+                return Err(error);
+            }
+        };
 
 
+        let il = inserted_laps.clone();
         thread::spawn(move || {
             let db_conn = &mut establish_connection();
-            let r_conn = &mut Redis::connect();
+            let r_conn = &mut match Redis::connect() {
+                Ok(rc) => rc,
+                Err(error) => {
+                    error!(target: "models/lap:insert_bulk", "Error connecting to redis: (error: {})", error);
+                    return;
+                }
+            };
 
             // clear the cache for the involved drivers
-            Driver::from_laps(db_conn, &inserted_laps)
-                .iter()
-                .for_each(|e| e.clear_cache(r_conn));
+            match Driver::from_laps(db_conn, &inserted_laps) {
+                Ok(e) => {
+                    e.iter()
+                        .for_each(|e| e.clear_cache(r_conn));
+                }
+                Err(_) => {
+                    error!(target:"models/lap:insert_bulk", "Error clearing cache could not get drivers");
+                }
+            }
+
 
             // clear for the heats
-            Heat::from_laps(db_conn, &inserted_laps)
-                .iter()
-                .for_each(|e| e.clear_cache(r_conn));
+            match Heat::from_laps(db_conn, &inserted_laps) {
+                Ok(v) => {
+                    v.iter()
+                        .for_each(|e| e.clear_cache(r_conn));
+                }
+                Err(error) => {
+                    error!(target:"models/lap:insert_bulk", "Error clearing cache could not get heats: (error: {})", error);
+                }
+            }
+
 
             // clear for karts
-            Kart::from_laps(db_conn, &inserted_laps)
-                .iter()
-                .for_each(|e| e.clear_cache(r_conn));
+            match Kart::from_laps(db_conn, &inserted_laps) {
+                Ok(v) => {
+                    v.iter()
+                        .for_each(|e| e.clear_cache(r_conn));
+                }
+                Err(error) => {
+                    error!(target:"models/lap:insert_bulk", "Error clearing cache could not get karts: (error: {})", error);
+                }
+            }
+
         });
+        Ok(il)
     }
 
     /************ GETTERS ************/
@@ -149,12 +195,11 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Lap` - The lap with the given id
-    pub fn from_id(conn: &mut PgConnection, id_in: i32) -> Lap {
+    pub fn from_id(conn: &mut PgConnection, id_in: i32) -> QueryResult<Lap> {
         use crate::schema::laps::dsl::*;
 
         laps.filter(id.eq(id_in))
             .first(conn)
-            .expect("Error finding lap")
     }
 
     /// # get all laps
@@ -165,9 +210,9 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps in the database
-    pub fn get_all(conn: &mut PgConnection) -> Vec<Lap> {
+    pub fn get_all(conn: &mut PgConnection) -> QueryResult<Vec<Lap>> {
         use crate::schema::laps::dsl::*;
-        laps.load::<Lap>(conn).unwrap()
+        laps.load::<Lap>(conn)
     }
 
     /// # get all laps driven by a kart
@@ -179,7 +224,7 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven by the kart
-    pub fn from_kart(conn: &mut PgConnection, kart_in: &Kart) -> Vec<Lap> {
+    pub fn from_kart(conn: &mut PgConnection, kart_in: &Kart) -> QueryResult<Vec<Lap>> {
         Lap::from_karts(conn, &vec![kart_in.to_owned()])
     }
 
@@ -200,11 +245,10 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven by the karts
-    pub fn from_karts(conn: &mut PgConnection, karts_in: &[Kart]) -> Vec<Lap> {
+    pub fn from_karts(conn: &mut PgConnection, karts_in: &[Kart]) -> QueryResult<Vec<Lap>> {
         use crate::schema::laps::dsl::*;
         laps.filter(kart_id.eq_any(karts_in.iter().map(|k| k.id).collect::<Vec<i32>>()))
             .load::<Lap>(conn)
-            .unwrap()
     }
 
     /// # get all laps driven by a driver
@@ -216,7 +260,7 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven by the driver
-    pub fn from_driver(conn: &mut PgConnection, driver_in: &Driver) -> Vec<Lap> {
+    pub fn from_driver(conn: &mut PgConnection, driver_in: &Driver) -> QueryResult<Vec<Lap>> {
         Lap::from_drivers(conn, &vec![driver_in.to_owned()])
     }
 
@@ -229,11 +273,10 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven by the drivers
-    pub fn from_drivers(conn: &mut PgConnection, drivers_in: &[Driver]) -> Vec<Lap> {
+    pub fn from_drivers(conn: &mut PgConnection, drivers_in: &[Driver]) -> QueryResult<Vec<Lap>> {
         use crate::schema::laps::dsl::*;
         laps.filter(driver.eq_any(drivers_in.iter().map(|e| e.id)))
             .load::<Lap>(conn)
-            .unwrap()
     }
 
     /// # get all laps driven by a list of drivers as map
@@ -249,8 +292,13 @@ impl Lap {
     pub fn from_drivers_as_map(
         conn: &mut PgConnection,
         drivers_in: &[Driver],
-    ) -> HashMap<Driver, Vec<Lap>> {
-        let laps = Lap::from_drivers(conn, drivers_in);
+    ) -> QueryResult<HashMap<Driver, Vec<Lap>>> {
+        let laps = match Lap::from_drivers(conn, drivers_in) {
+            Ok(laps) => laps,
+            Err(error) => {
+                return Err(error);
+            }
+        };
 
         let mut heat_lap_map: HashMap<Driver, Vec<Lap>> = HashMap::new();
         for lap in laps {
@@ -267,7 +315,7 @@ impl Lap {
             }
         }
 
-        heat_lap_map
+        Ok(heat_lap_map)
     }
 
     /// # get all laps driven in a heat
@@ -279,7 +327,7 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven in the heat
-    pub fn from_heat(conn: &mut PgConnection, heat_in: &Heat) -> Vec<Lap> {
+    pub fn from_heat(conn: &mut PgConnection, heat_in: &Heat) -> QueryResult<Vec<Lap>> {
         Lap::from_heats(conn, &vec![heat_in.to_owned()])
     }
 
@@ -292,11 +340,10 @@ impl Lap {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - All laps driven in the heats
-    pub fn from_heats(conn: &mut PgConnection, heat_in: &[Heat]) -> Vec<Lap> {
+    pub fn from_heats(conn: &mut PgConnection, heat_in: &[Heat]) -> QueryResult<Vec<Lap>> {
         use crate::schema::laps::dsl::*;
         laps.filter(heat.eq_any(heat_in.iter().map(|h| h.id)))
             .load::<Lap>(conn)
-            .unwrap()
     }
 
     /// # get all laps from heats
@@ -312,10 +359,9 @@ impl Lap {
     pub fn from_heats_as_map(
         conn: &mut PgConnection,
         heats_in: &[Heat],
-    ) -> HashMap<Heat, Vec<Lap>> {
-        let laps = Lap::from_heats(conn, heats_in);
-
-        Lap::from_heats_as_map_offline(heats_in, &laps)
+    ) -> QueryResult<HashMap<Heat, Vec<Lap>>> {
+        let laps = db_handle_get_error!(Lap::from_heats(conn, heats_in), "/models/lap:from_heats_as_map", "laps from heats");
+        Ok(Lap::from_heats_as_map_offline(heats_in, &laps))
     }
 
     pub fn from_heats_as_map_offline(heats: &[Heat], laps: &[Lap]) -> HashMap<Heat, Vec<Lap>> {

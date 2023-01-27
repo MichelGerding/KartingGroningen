@@ -9,11 +9,13 @@ pub enum Error {
     #[snafu(display(""))]
     FileDoesNotExistError {},
     #[snafu(display(""))]
-    HeatNotFoundError {},
+    NotFoundError {},
     #[snafu(display(""))]
     ConnectionError {},
     #[snafu(display(""))]
-    PermissionDeniedError {}
+    PermissionDeniedError {},
+    #[snafu(display(""))]
+    DatabaseError {},
 }
 
-pub type CustomResult<T, E = Error> = std::result::Result<T, E>;
+pub type CustomResult<T, E = Error> = Result<T, E>;
