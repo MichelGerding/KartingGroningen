@@ -1,13 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::thread;
 
-use crate::errors::HeatInvalidError;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::{Double, Integer, Timestamp, VarChar};
 use diesel::{sql_query, Identifiable, NotFound, PgConnection, Queryable};
+use diesel::result::Error;
 use identifiable_derive::HasId;
-use redis::Commands;
 use serde::{Deserialize, Serialize};
 
 use crate::modules::models::driver::Driver;
@@ -24,8 +23,11 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
+use log::{error, warn};
 use skillratings::MultiTeamOutcome;
 use skillratings::weng_lin::{weng_lin_multi_team, WengLinConfig, WengLinRating};
+use crate::macros::database_error_handeler::{db_handle_get_error};
+use crate::macros::redis::{clear_cache, delete_keys};
 
 
 #[derive(Insertable, Serialize, Debug, Clone, Deserialize)]
@@ -64,7 +66,7 @@ impl Heat {
         heat_id_in: &str,
         heat_type_in: &str,
         start_date_in: &str,
-    ) -> Heat {
+    ) -> QueryResult<Heat> {
         use crate::schema::heats::dsl::*;
 
         let timestamp =
@@ -75,15 +77,20 @@ impl Heat {
             start_date: timestamp,
         };
 
-        let heat: Heat = diesel::insert_into(heats)
+        let heat = match diesel::insert_into(heats)
             .values(&new_heat)
-            .get_result(conn)
-            .expect("Error saving new heat");
+            .get_result::<Heat>(conn) {
+            Ok(heat) => heat,
+            Err(e) => {
+                error!(target:"models/heat:new", "Error creating heat: {}", e);
+                return Err(e);
+            }
+        };
+
+        clear_cache!(heat);
 
 
-        heat.clear_cache(&mut Redis::connect());
-
-        heat
+        Ok(heat)
     }
 
     /// # check if exists
@@ -110,8 +117,8 @@ impl Heat {
     ///
     /// ## Arguments
     /// * `conn` - the database connection
-    pub fn delete(&self, conn: &mut PgConnection) {
-        Heat::delete_db_id(conn, self.id);
+    pub fn delete(&self, conn: &mut PgConnection) -> QueryResult<bool> {
+        Heat::delete_db_id(conn, self.id)
     }
 
     /// # delete heat by id
@@ -121,11 +128,30 @@ impl Heat {
     /// ## Arguments
     /// * `conn` - the database connection
     /// * `heat_id` - the id of the heat to delete
-    pub fn delete_id(conn: &mut PgConnection, heat_id: &str) {
+    pub fn delete_id(conn: &mut PgConnection, heat_id: &str) -> Result<bool, Error> {
         match Heat::get_by_id(conn, heat_id) {
-            Ok(heat) => heat.delete(conn),
-            Err(_) => {}
-        };
+            Ok(heat) => {
+                match heat.delete(conn) {
+                    Ok(success) => {Ok(success)}
+                    Err(NotFound) => {
+                        warn!(target:"models/heat:delete_id", "Heat {} not found", heat_id);
+                        Ok(false)
+                    }
+                    Err(error) => {
+                        error!(target:"models/heat:delete_id", "Error deleting heat: {}", error);
+                        Err(error)
+                    }
+                }
+            },
+            Err(NotFound) => {
+                warn!(target:"models/heat:delete_id", "Heat not found: {}", heat_id);
+                Ok(false)
+            },
+            Err(err) => {
+                error!(target:"models/heat:delete_id", "Error getting heat: {}", err);
+                Err(err)
+            }
+        }
     }
 
     /// # delete heat by db id
@@ -137,37 +163,77 @@ impl Heat {
     /// ## Arguments
     /// * `conn` - the database connection
     /// * `db_id` - the database id of the heat to delete
-    pub fn delete_db_id(conn: &mut PgConnection, db_id: i32) {
+    pub fn delete_db_id(conn: &mut PgConnection, db_id: i32) -> QueryResult<bool> {
+        let heat = match Heat::get_by_db_id(conn, db_id) {
+            Ok(heat) => heat,
+            Err(NotFound) => {
+                warn!(target:"models/heat:delete_db_id", "No laps found for heat {}", db_id);
+                return Err(NotFound);
+            }
+            Err(err) => {
+                error!(target:"models/heat:delete_db_id", "Error deleting laps from heat: {}", db_id);
+                return Err(err);
+            }
+        };
 
-        let heat = Heat::get_by_db_id(conn, db_id);
-        let laps = Lap::from_heat(conn, &heat);
-        let drivers = Driver::from_laps(conn, &laps);
+        let laps = db_handle_get_error!(Lap::from_heat(conn, &heat), "models/heat:delete_db_id", format!("laps from heat: {}", &heat.heat_id));
+        let drivers = db_handle_get_error!(Driver::from_laps(conn, &laps), "models/heat:delete_db_id", format!("drivers from laps in heat {}", &heat.heat_id));
 
         thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-            for driver in drivers {
-                driver.clear_cache(r_conn);
-            }
+            match &mut Redis::connect() {
+                Ok(r_conn) => {
+                    for driver in drivers {
+                        driver.clear_cache(r_conn);
+                    }
 
-            heat.clear_cache(r_conn);
+                    heat.clear_cache(r_conn);
+                }
+                Err(err) => {
+                    error!(target:"models/heat:delete_db_id", "Error connecting to redis: {}", err);
+                }
+            };
+
         });
 
         // delete all laps in one query
-        diesel::delete(laps::table.filter(laps::heat.eq(db_id)))
-            .execute(conn)
-            .expect("Error deleting laps");
+        match diesel::delete(laps::table.filter(laps::heat.eq(db_id)))
+            .execute(conn) {
+            Ok(_) => {
+                // delete the heat
+                match diesel::delete(heats::table.filter(heats::id.eq(db_id)))
+                    .execute(conn) {
+                    Ok(_) => Ok(true),
+                    Err(NotFound) => {
+                        warn!(target:"models/heat:delete_db_id", "Heat not found. (db_id: {})", db_id);
+                        Ok(false)
+                    }
+                    Err(error) => {
+                        error!(target:"models/heat:delete_db_id", "Error deleting heat: {}", error);
+                        Err(error)
+                    }
+                }
+            }
+            Err(NotFound) => {
+                warn!(target:"models/heat:delete_db_id", "No laps found for heat {}", db_id);
+                Ok(false)
+            }
+            Err(err) => {
+                error!(target:"models/heat:delete_db_id", "Error deleting laps from heat: {}", db_id);
+                return Err(err);
+            }
+        }
 
-        // delete the heat
-        diesel::delete(heats::table.filter(heats::id.eq(db_id)))
-            .execute(conn)
-            .expect("Error deleting heat");
+
     }
 
     pub fn clear_cache(&self, r_conn: &mut redis::Connection) {
-        // get all keys
-        let mut keys = r_conn
-            .keys::<String, Vec<String>>(format!("*{}*", self.heat_id))
-            .expect("Error getting keys from redis");
+        let mut keys: Vec<String> = match Redis::keys(r_conn, &self.heat_id) {
+            Ok(keys) => keys,
+            Err(error) => {
+                error!(target:"models/driver:clear_cache", "error while getting keys from redis: {}", error);
+                return;
+            }
+        };
 
         keys.append(&mut vec![
             "/api/drivers/all".to_string(),
@@ -180,9 +246,7 @@ impl Heat {
         ]);
 
         // delete all keys
-        for key in keys {
-            r_conn.del::<String, ()>(key).expect("Error deleting key");
-        }
+        delete_keys!(r_conn, keys, "models/heat:clear_cache");
     }
 
     /// # get heat by id
@@ -195,8 +259,15 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Heat` - the heat
-    pub fn get_by_db_id(conn: &mut PgConnection, db_id: i32) -> Heat {
-        Heat::get_from_db_ids(conn, &[db_id]).pop().unwrap()
+    pub fn get_by_db_id(conn: &mut PgConnection, db_id: i32) -> QueryResult<Heat> {
+        match Heat::get_from_db_ids(conn, &[db_id]) {
+            Ok(mut heats) => Ok(heats.pop().unwrap()),
+            Err(NotFound) => Err(NotFound),
+            Err(error) => {
+                error!(target:"models/heat:get_by_db_id", "Error getting heat: {}", error);
+                Err(error)
+            }
+        }
     }
 
     /// # get from db ids
@@ -209,13 +280,12 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Vec<Heat>` - the heats with the given database ids
-    pub fn get_from_db_ids(conn: &mut PgConnection, db_ids: &[i32]) -> Vec<Heat> {
+    pub fn get_from_db_ids(conn: &mut PgConnection, db_ids: &[i32]) -> QueryResult<Vec<Heat>> {
         use crate::schema::heats::dsl::*;
 
         heats
             .filter(id.eq_any(db_ids))
             .load::<Heat>(conn)
-            .expect("Error loading heat")
     }
 
     /// # get the heats from a list of laps
@@ -227,7 +297,7 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Vec<Heat>` - the heats
-    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> Vec<Heat> {
+    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> QueryResult<Vec<Heat>> {
         let heat_ids = laps.iter().map(|e| e.heat).collect::<Vec<i32>>();
 
         Heat::get_from_db_ids(conn, &heat_ids)
@@ -262,17 +332,12 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Heat` - the heat
-    pub fn get_by_id(conn: &mut PgConnection, heat_id_in: &str) -> Result<Heat, HeatInvalidError> {
+    pub fn get_by_id(conn: &mut PgConnection, heat_id_in: &str) -> QueryResult<Heat> {
         use crate::schema::heats::dsl::*;
 
-        match heats.filter(heat_id.like(heat_id_in)).first::<Heat>(conn) {
-            Ok(heat) => Ok(heat),
-            Err(NotFound) => Err(HeatInvalidError::new(format!(
-                "Heat: {} not found",
-                heat_id_in
-            ))),
-            Err(_) => Err(HeatInvalidError::new("Unknown error".to_string())),
-        }
+        heats
+            .filter(heat_id.like(heat_id_in))
+            .first::<Heat>(conn)
     }
 
     /// # get all heats
@@ -282,10 +347,10 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Vec<Heat>` - all the heats
-    pub fn get_all(conn: &mut PgConnection) -> Vec<Heat> {
+    pub fn get_all(conn: &mut PgConnection) -> QueryResult<Vec<Heat>> {
         use crate::schema::heats::dsl::*;
 
-        heats.load::<Heat>(conn).expect("Error loading heats")
+        heats.load::<Heat>(conn)
     }
 
     /// # get the laps of the heat
@@ -296,7 +361,7 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - the laps of the heat
-    pub fn get_laps(&self, conn: &mut PgConnection) -> Vec<Lap> {
+    pub fn get_laps(&self, conn: &mut PgConnection) -> QueryResult<Vec<Lap>> {
         Lap::from_heat(conn, self)
     }
 
@@ -309,7 +374,7 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Vec<HeatStats>` - all the heats with stats
-    pub fn get_all_with_stats(conn: &mut PgConnection) -> Vec<HeatStats> {
+    pub fn get_all_with_stats(conn: &mut PgConnection) -> QueryResult<Vec<HeatStats>> {
         sql_query(
             "
         select
@@ -327,7 +392,6 @@ impl Heat {
         ",
         )
         .load::<HeatStats>(conn)
-        .expect("Error loading heats")
     }
 
     /// # get a single heat with stats
@@ -340,8 +404,8 @@ impl Heat {
     ///
     /// ## Returns
     /// * `HeatStats` - heat and its stats
-    pub fn get_with_stats(conn: &mut PgConnection, heat_id: String) -> HeatStats {
-        sql_query(
+    pub fn get_with_stats(conn: &mut PgConnection, heat_id: String) -> QueryResult<HeatStats> {
+        sql_query(format!(
             "
         select
             h.id,
@@ -354,13 +418,10 @@ impl Heat {
             avg(l.lap_time) as average_lap_time
         from heats h
                  inner join laps l on h.id = l.heat
-        where h.heat_id = 'BB4E21447521429EBBCD7602BB08BEF0'
+        where h.heat_id = '{}'
         group by h.id
-        ",
-        )
-        .bind::<VarChar, _>(heat_id)
-        .get_result(conn)
-        .expect("TODO: panic message")
+        ", heat_id))
+        .get_result::<HeatStats>(conn)
     }
 
     /// # get all heats sorted by date
@@ -398,14 +459,11 @@ impl Heat {
         heat_id: &str,
         heat_type: &str,
         start_time: &str,
-    ) -> Heat {
+    ) -> QueryResult<Heat> {
         if !Heat::exists(conn, heat_id) {
             Heat::new(conn, heat_id, heat_type, start_time)
         } else {
-            match Heat::get_by_id(conn, heat_id) {
-                Ok(heat) => heat,
-                Err(e) => panic!("{}", e.to_string()),
-            }
+            Heat::get_by_id(conn, heat_id)
         }
     }
 
@@ -431,25 +489,33 @@ impl Heat {
     ///
     /// ## Returns
     /// * `HashMap<String, Vec<Lap>>` - the laps per driver
-    pub fn laps_per_driver(&self, conn: &mut PgConnection) -> HashMap<Driver, Vec<Lap>> {
-        let v_laps = Lap::from_heat(conn, self);
-        let v_drivers = Driver::from_laps(conn, &v_laps);
-
-        Heat::parse_laps_and_drivers_into_map(&v_laps, &v_drivers)
+    pub fn laps_per_driver(&self, conn: &mut PgConnection) -> QueryResult<HashMap<Driver, Vec<Lap>>> {
+        let v_laps = db_handle_get_error!(Lap::from_heat(conn, self), "/models/heat:laps_per_driver", "laps from heat");
+        match Driver::from_laps(conn, &v_laps) {
+            Ok(drivers) => Ok(Heat::parse_laps_and_drivers_into_map(&v_laps, &drivers)),
+            Err(error) => {
+                error!(target:"models/heat:laps_per_driver", "Error getting laps der driver: {}", error);
+                Err(error)
+            }
+        }
     }
 
     /// # get driver stats
     /// get the stats of all drivers in the heat
     /// the function returns a hashmap that uses the driver as key and the stats as value
-    pub fn get_driver_stats(&self, conn: &mut PgConnection) -> HashMap<Driver, LapsStats> {
-        let laps_per_driver = self.laps_per_driver(conn);
-
-        let mut driver_stats = HashMap::new();
-        for (driver, laps) in laps_per_driver {
-            driver_stats.insert(driver.to_owned(), Lap::get_stats_of_laps(&laps.to_owned()));
+    pub fn get_driver_stats(&self, conn: &mut PgConnection) -> QueryResult<HashMap<Driver, LapsStats>> {
+        match self.laps_per_driver(conn) {
+            Ok(laps_per_driver) => {
+                let mut driver_stats = HashMap::new();
+                for (driver, laps) in laps_per_driver {
+                    driver_stats.insert(driver.to_owned(), Lap::get_stats_of_laps(&laps.to_owned()));
+                }
+                Ok(driver_stats)
+            }
+            Err(error) => {
+                Err(error)
+            }
         }
-
-        driver_stats
     }
 
     /// # get amount of heats
@@ -490,10 +556,24 @@ impl Heat {
         heat_laps
     }
 
-    pub fn get_full_info(&self, connection: &mut PgConnection) -> FullHeatInfo {
-        let laps = Lap::from_heat(connection, self);
-        let drivers: Vec<Driver> = Driver::from_laps(connection, &laps);
-        let karts: Vec<Kart> = Kart::from_laps(connection, &laps);
+    pub fn get_full_info(&self, connection: &mut PgConnection) -> QueryResult<FullHeatInfo> {
+        let laps = db_handle_get_error!(Lap::from_heat(connection, self), "/models/heat:get_full_info", "laps from heat");
+
+        let drivers: Vec<Driver> = match Driver::from_laps(connection, &laps) {
+            Ok(drivers) => drivers,
+            Err(error) => {
+                error!(target:"hmodels/eat:get_full_info", "Error getting drivers from laps: {}", error);
+                return Err(error);
+            }
+        };
+
+        let karts: Vec<Kart> = match Kart::from_laps(connection, &laps) {
+            Ok(k) => k,
+            Err(error) => {
+                error!(target:"models/heat:get_full_info", "Error getting karts from laps: {}", error);
+                return Err(error);
+            }
+        };
 
         let laps_per_driver = Heat::parse_laps_and_drivers_into_map(&laps, &drivers);
 
@@ -518,7 +598,7 @@ impl Heat {
             });
         }
 
-        full_heat_info
+        Ok(full_heat_info)
     }
 
     /// # parse laps and drivers into map
@@ -582,9 +662,9 @@ impl Heat {
     }
 
 
-    pub fn apply_ratings(&self, connection: &mut PgConnection) {
+    pub fn apply_ratings(&self, connection: &mut PgConnection) -> QueryResult<bool> {
         #[derive(QueryableByName, Debug)]
-        struct LocalRating {
+        struct LocalDriver {
             #[diesel(sql_type = Integer)]
             id: i32,
             #[diesel(sql_type = Double)]
@@ -594,7 +674,7 @@ impl Heat {
         }
 
         // get the order the drivers finished in the heat
-        let drivers: Vec<LocalRating> = sql_query(format!("
+        let drivers = match sql_query(format!("
             SELECT d.id, d.rating, d.uncertainty from drivers d
                 inner join laps l on d.id = l.driver
                 inner join heats h on l.heat = h.id
@@ -602,10 +682,15 @@ impl Heat {
             group by d.id
             order by min(l.lap_time) asc
         ", self.heat_id))
-            .load::<LocalRating>(connection)
-            .unwrap();
+            .load::<LocalDriver>(connection) {
+            Ok(drivers) => drivers,
+            Err(error) => {
+                error!(target:"models/heat:apply_ratings", "Error getting drivers from heat: {}", error);
+                return Err(error);
+            }
+        };
 
-        println!("drivers: {:?}", drivers);
+
 
         let teams: Vec<Vec<WengLinRating>> = drivers
             .iter()
@@ -630,10 +715,16 @@ impl Heat {
         let new_ratings = weng_lin_multi_team(&rating_groups[..], &WengLinConfig::default());
         for (position, driver) in drivers.iter().enumerate() {
             let new_rating = &new_ratings[position];
-            println!("{}: {} -> {}", driver.id, driver.rating, new_rating[0].rating);
-            Driver::set_rating_id(connection, driver.id, new_rating[0]);
-
+            match Driver::set_rating_id(connection, driver.id, new_rating[0]) {
+                Ok(_) => {},
+                Err(error) => {
+                    error!(target:"models/heat:apply_ratings", "Error setting rating for driver: {}", error);
+                    return Err(error);
+                }
+            };
         }
+
+        Ok(true)
     }
 }
 

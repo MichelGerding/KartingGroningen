@@ -16,11 +16,13 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
+use log::error;
 
 use crate::modules::redis::Redis;
 use crate::macros::request_caching::{cache_response, read_cache_request};
 use rocket::http::uri::Origin;
 use serde::Deserialize;
+use crate::macros::database_error_handeler::db_handle_get_error_http;
 
 
 #[get("/karts/<kart_number>")]
@@ -43,16 +45,24 @@ pub fn get_one_full(kart_number: i32, origin: &Origin) -> Result<ApiKartResult, 
     let connection = &mut establish_connection();
     let kart: Kart = match Kart::get_by_number(connection, kart_number) {
         Ok(kart) => kart,
+        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
         Err(e) => {
-            println!("{:?}", e);
-            return Err(Status::NotFound); },
+            error!(target:"routes/api/kart:get_one_full", "Error getting kart: {}", e);
+            return Err(Status::InternalServerError);
+        },
     };
 
-    let all_laps = Lap::from_kart(connection, &kart);
-    let all_drivers = Driver::from_laps(connection, &all_laps);
-    let all_heats = Heat::from_laps(connection, &all_laps);
+    let all_laps = db_handle_get_error_http!(Lap::from_kart(connection, &kart), "/routes/api/kart:get_one_full", format!("laps for kart: {}", &kart.number));
+    let all_heats = db_handle_get_error_http!(Heat::from_laps(connection, &all_laps), "/routes/api/kart:get_one_full", format!("heats for kart: {}", &kart.number));
 
-    let result = ApiKartResult::new(&kart, &all_laps, &all_drivers, &all_heats);
+    let result = match Driver::from_laps(connection, &all_laps) {
+        Ok(all_drivers) => ApiKartResult::new(&kart, &all_laps, &all_drivers, &all_heats),
+        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
+        Err(error) => {
+            error!(target:"routes/api/kart:get_one_full", "Error getting driver: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
 
     cache_response!(origin, result);
 
@@ -77,14 +87,13 @@ pub fn get_all(origin: &Origin) -> Result<String, Status> {
 pub fn get_all_full(origin: &Origin) -> Result<String, Status> {
     read_cache_request!(origin);
 
-
     let connection = &mut establish_connection();
 
     // get the kart and stats
-    let all_karts = Kart::get_all(connection);
-    let all_laps = Lap::get_all(connection);
-    let all_drivers = Driver::get_all(connection);
-    let all_heats = Heat::get_all(connection);
+    let all_karts = db_handle_get_error_http!(Kart::get_all(connection), "/routes/api/kart:get_all_full", "all karts");
+    let all_laps = db_handle_get_error_http!(Lap::get_all(connection), "/routes/api/kart:get_all_full", "all karts");
+    let all_drivers = db_handle_get_error_http!(Driver::get_all(connection), "/routes/api/kart:get_all_full", "all karts");
+    let all_heats = db_handle_get_error_http!(Heat::get_all(connection), "/routes/api/kart:get_all_full", "all karts");
 
     let api_karts: Vec<ApiKartResult> = ApiKartResult::bulk_new(all_karts, all_laps, all_drivers, all_heats);
 

@@ -9,6 +9,8 @@ use rocket::{get, FromForm};
 use rocket::http::uri::Origin;
 use serde::{Deserialize, Serialize};
 use json_response_derive::JsonResponse;
+use log::error;
+use crate::macros::database_error_handeler::db_handle_get_error_http;
 
 use crate::modules::models::driver::{Driver, DriverStats, sanitize_name};
 use crate::modules::models::general::establish_connection;
@@ -40,7 +42,14 @@ pub fn get_one_stats(driver_name: String, origin: &Origin) -> Result<DriverStats
     read_cache_request!(origin);
 
     let connection = &mut establish_connection();
-    let driver = Driver::get_driver_with_stats(connection, driver_name);
+    let driver = match Driver::get_driver_with_stats(connection, driver_name) {
+        Ok(driver) => driver,
+        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
+        Err(error) => {
+            error!(target:"routes/api/driver:get_one_stats", "Error getting driver: {}", error);
+            return Err(Status::InternalServerError);
+        }
+    };
 
     cache_response!(origin, driver);
 }
@@ -58,15 +67,11 @@ pub fn get_one(driver_name: String, origin: &Origin) -> Result<ApiDriver, Status
     read_cache_request!(origin);
 
     let conn = &mut establish_connection();
-    let driver = match Driver::get_by_name(conn, &driver_name) {
-        Ok(d)  => d,
-        Err(_) => return Err(Status::NotFound),
-    };
+    let driver = db_handle_get_error_http!(Driver::get_by_name(conn, &driver_name), "routes/api/driver:get_one", "driver");
 
-    let laps = driver.get_laps(conn);
-    let heats = Heat::from_laps(conn, &laps);
-    let karts = Kart::from_laps(conn, &laps);
-
+    let laps = db_handle_get_error_http!(driver.get_laps(conn), "routes/api/driver:get_one", "laps");
+    let heats = db_handle_get_error_http!(Heat::from_laps(conn, &laps), "routes/api/driver:get_one", "heats");
+    let karts = db_handle_get_error_http!(Kart::from_laps(conn, &laps), "routes/api/driver:get_one", "karts");
 
     let api_driver = ApiDriver::new(&driver, &heats, &laps, &karts);
 
@@ -86,19 +91,13 @@ pub fn search_full(name: String, page: Option<i32>, page_size: Option<i32>) -> R
     let drivers;
 
     if page.is_none() || page_size.is_none() {
-        drivers = match Driver::search_by_name(conn, &name) {
-            Ok(d)  => d,
-            Err(_) => return Err(Status::NotFound),
-        };
+        drivers = db_handle_get_error_http!(Driver::search_by_name(conn, &name), "routes/api/driver:search_full", "drivers");
     } else {
-        drivers = match Driver::search_by_name_paginated(conn, &name, page.unwrap(), page_size.unwrap()) {
-            Ok(d)  => d,
-            Err(_) => return Err(Status::NotFound),
-        };
+        drivers = db_handle_get_error_http!(Driver::search_by_name_paginated(conn, &name, page.unwrap(), page_size.unwrap()), "routes/api/driver:search_full", "drivers");
     }
 
 
-    let all_laps_map = Lap::from_drivers_as_map(conn, &drivers);
+    let all_laps_map = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &drivers), "routes/api/driver:search_full", format!("laps as map for drivers `%{}%`", name));
 
     let all_laps: Vec<Lap> = all_laps_map
         .iter()
@@ -107,8 +106,8 @@ pub fn search_full(name: String, page: Option<i32>, page_size: Option<i32>) -> R
         .map(|e| e.to_owned())
         .collect();
 
-    let all_heats = Heat::from_laps(conn, &all_laps);
-    let all_karts = Kart::from_laps(conn, &all_laps);
+    let all_heats = db_handle_get_error_http!(Heat::from_laps(conn, &all_laps), "routes/api/driver:search_full", "heats");
+    let all_karts = db_handle_get_error_http!(Kart::from_laps(conn, &all_laps), "routes/api/driver:search_full", "karts");
 
     let api_drivers: Vec<ApiDriver> = ApiDriver::bulk_new(&drivers, &all_laps_map, &all_heats, &all_karts);
     Ok(serde_json::to_string(&api_drivers).unwrap())
@@ -151,7 +150,11 @@ pub fn get_all_ids(origin: &Origin) -> Result<String, Status> {
     read_cache_request!(origin);
 
     let conn = &mut establish_connection();
-    let drivers = serde_json::to_string(&Driver::get_all_with_stats(conn)).unwrap();
+    let drivers = match Driver::get_all_with_stats(conn) {
+        Ok(drivers) => serde_json::to_string(&drivers).unwrap(),
+        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
+        Err(_) => return Err(Status::InternalServerError),
+    };
 
     cache_response!(origin, drivers);
 }
@@ -171,10 +174,10 @@ pub fn get_all(origin: &Origin) -> Result<String, Status> {
 
     let conn = &mut establish_connection();
 
-    let all_heats = Heat::get_all(conn);
-    let all_drivers = Driver::get_all(conn);
-    let all_karts = Kart::get_all(conn);
-    let all_laps = Lap::from_drivers_as_map(conn, &all_drivers);
+    let all_heats = db_handle_get_error_http!(Heat::get_all(conn), "routes/api/driver:get_all", "heats");
+    let all_drivers = db_handle_get_error_http!(Driver::get_all(conn), "routes/api/driver:get_all", "heats");
+    let all_karts = db_handle_get_error_http!(Kart::get_all(conn), "routes/api/driver:get_all", "heats");
+    let all_laps = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &all_drivers), "routes/api/driver:get_all", "laps from drivers as map");
 
     let api_drivers: Vec<ApiDriver> = ApiDriver::bulk_new(&all_drivers, &all_laps, &all_heats, &all_karts);
 
