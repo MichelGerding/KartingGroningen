@@ -11,7 +11,7 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
     let verbosity_str = verbosity.as_str();
 
     //TODO:: add logging to discord.
-    let mut base_config = fern::Dispatch::new();
+    let mut base_config = Dispatch::new();
 
     base_config = match verbosity_str {
         "OFF" => base_config.level(log::LevelFilter::Off),
@@ -27,6 +27,9 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
 
     let file_logger_config = Dispatch::new()
         .format(|out, message, record| {
+            if record.target() == "handlebars::render" {
+                return;
+            }
             out.finish(format_args!(
                 "{} [{}][{}] {}",
                 chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
@@ -37,8 +40,30 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
         })
         .chain(fern::log_file("program.log").unwrap());
 
+    let stdout_logger_config = Dispatch::new()
+        .format(|out, message, record| {
+            if record.target().starts_with("rocket") ||
+                record.target() == "_" {
+                return out.finish(format_args!("{}", message));
+            }
+
+            if record.target() == "handlebars::render" {
+                return;
+            }
+
+            out.finish(format_args!(
+                "{} [{}][{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .chain(std::io::stdout());
+
     base_config
         .chain(file_logger_config)
+        .chain(stdout_logger_config)
         .apply()?;
 
     Ok(())
