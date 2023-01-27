@@ -2,13 +2,15 @@ use diesel::PgConnection;
 use serde::Deserialize;
 
 use std::fmt::Debug;
+use std::error;
 
-use crate::errors::AlreadyExistsError;
+use crate::errors::{CustomResult, Error};
 use crate::modules::models::driver::{sanitize_name, Driver};
 use crate::modules::models::heat::Heat;
 use crate::modules::models::kart::Kart;
 use crate::modules::models::lap::{Lap, NewLap};
 use log::{info, warn};
+use rocket::response::status::Custom;
 use tokio::task::{JoinSet};
 
 
@@ -72,10 +74,9 @@ pub async fn get_heat_from_api(heat_id: String) -> serde_json::Result<WebRespons
     serde_json::from_str(&body_cleaned)
 }
 
-pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> Result<String, AlreadyExistsError> {
+pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<String> {
     if Heat::exists(conn, &heat.heat.id) {
-        warn!(target: "saving_heat", "heat already exists, skipping {}", heat.heat.id);
-        return Ok(heat.heat.id);
+        return Err(Error::AlreadyExistsError {});
     }
 
 
@@ -98,8 +99,7 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> Result<String, A
 
     for driver in &heat.results {
         if driver.participation.driver_name.parse::<f64>().is_ok() {
-            // throw error
-            return Ok("".to_string());
+            return Err(Error::InvalidNameError {});
         }
     }
 
@@ -127,7 +127,6 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> Result<String, A
         Lap::insert_bulk(conn, &laps);
     }
 
-    info!(target: "saving_heat", "heat {} saved", heat.heat.id);
     Ok(heat_id.heat_id)
 }
 

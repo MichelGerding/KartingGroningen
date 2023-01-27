@@ -1,7 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::thread;
 
-use crate::errors::HeatInvalidError;
 use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use diesel::sql_types::{Double, Integer, Timestamp, VarChar};
@@ -26,6 +25,8 @@ use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
 use skillratings::MultiTeamOutcome;
 use skillratings::weng_lin::{weng_lin_multi_team, WengLinConfig, WengLinRating};
+use crate::errors::{CustomResult, Error};
+use crate::errors::Error::ConnectionError;
 
 
 #[derive(Insertable, Serialize, Debug, Clone, Deserialize)]
@@ -262,16 +263,13 @@ impl Heat {
     ///
     /// ## Returns
     /// * `Heat` - the heat
-    pub fn get_by_id(conn: &mut PgConnection, heat_id_in: &str) -> Result<Heat, HeatInvalidError> {
+    pub fn get_by_id(conn: &mut PgConnection, heat_id_in: &str) -> CustomResult<Heat> {
         use crate::schema::heats::dsl::*;
 
         match heats.filter(heat_id.like(heat_id_in)).first::<Heat>(conn) {
             Ok(heat) => Ok(heat),
-            Err(NotFound) => Err(HeatInvalidError::new(format!(
-                "Heat: {} not found",
-                heat_id_in
-            ))),
-            Err(_) => Err(HeatInvalidError::new("Unknown error".to_string())),
+            Err(NotFound) => Err(Error::HeatNotFoundError {}),
+            Err(_) => Err(ConnectionError {}),
         }
     }
 
