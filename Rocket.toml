@@ -3,7 +3,7 @@ address = "0.0.0.0"
 template_dir="front-end/templates"
 
 [release]
-port = 8092
+port = 80
 
 [debug]
 port = 8080
