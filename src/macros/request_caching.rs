@@ -6,12 +6,18 @@ macro_rules! read_cache_request {
     ( $origin:expr ) => {
         if !cfg!(debug_assertions) {
             let uri = $origin.path().to_string();
-            let r_con = &mut Redis::connect();
-
-            if Redis::has_data::<String>(r_con,uri.clone()).unwrap() {
-                let data = Redis::get_data::<String, String>(r_con,uri.clone()).unwrap();
-                let api_driver = serde_json::from_str(&data).unwrap();
-                return Ok(api_driver);
+            match &mut Redis::connect() {
+                Ok(r_conn) => {
+                    if Redis::has_data::<String>(r_conn,uri.clone()).unwrap() {
+                        let data = Redis::get_data::<String, String>(r_conn,uri.clone()).unwrap();
+                        let api_driver = serde_json::from_str(&data).unwrap();
+                        return Ok(api_driver);
+                    }
+                },
+                Err(error) => {
+                    error!(target:"routes/heat:list_all", "Error connecting to redis: {}", error);
+                    return Err(Status::InternalServerError);
+                }
             }
         }
     }
@@ -25,13 +31,19 @@ macro_rules! cache_response {
     ( $origin:expr, $data:expr ) => {
         if !cfg!(debug_assertions) {
             let uri = $origin.path().to_string();
-            let r_con = &mut Redis::connect();
-            let response_str = serde_json::to_string(&$data).unwrap();
-
-            Redis::set_data::<String, String>(r_con,uri, response_str.clone());
+            match &mut Redis::connect() {
+                Ok(r_conn) => {
+                    let response_str = serde_json::to_string(&$data).unwrap();
+                    let _ = Redis::set_data::<String, String>(r_conn,uri, response_str.clone());
+                },
+                Err(error) => {
+                    error!(target:"routes/heat:list_all", "Error connecting to redis: {}", error);
+                    return Err(Status::InternalServerError);
+                }
+            }
         }
 
-        return Ok($data);
+        return Ok($data)
     }
 }
 
