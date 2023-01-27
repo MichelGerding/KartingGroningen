@@ -6,8 +6,7 @@ use diesel::dsl::{exists};
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use diesel::sql_types::{Double, Integer, VarChar};
-use diesel::{NotFound, select, sql_query};
-use diesel::result::Error;
+use diesel::{select, sql_query};
 use serde::{Deserialize, Serialize};
 
 use crate::modules::helpers::general::Helpers;
@@ -22,7 +21,6 @@ use crate::{TemplateDataDriver, TemplateDataLap};
 use crate::modules::redis::Redis;
 
 use identifiable_derive::HasId;
-use redis::Commands;
 use regex::Regex;
 
 use rocket::response;
@@ -31,7 +29,9 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
+use log::error;
 use skillratings::weng_lin::WengLinRating;
+use crate::macros::redis::{clear_cache, delete_keys};
 
 
 trait IdentifiableAsMap {
@@ -79,7 +79,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Result<Driver, diesel::result::Error>` - the driver that was created
-    pub fn new(connection: &mut PgConnection, name: &str) -> Driver {
+    pub fn new(connection: &mut PgConnection, name: &str) -> QueryResult<Driver> {
         let sanitized_name = sanitize_name(name);
         let new_driver = NewDriver {
             name: sanitized_name.to_string(),
@@ -87,15 +87,19 @@ impl Driver {
             uncertainty: 25.0/3.0,
         };
 
-        let driver: Driver = diesel::insert_into(drivers::table)
+        let driver= match diesel::insert_into(drivers::table)
             .values(&new_driver)
-            .get_result(connection)
-            .unwrap();
+            .get_result::<Driver>(connection) {
+            Ok(driver) => driver,
+            Err(error) => {
+                error!(target:"models::driver::new", "Error creating new driver: {}", error);
+                return Err(error);
+            }
+        };
 
-        driver.clear_cache(&mut Redis::connect());
+        clear_cache!(driver);
 
-
-        driver
+        Ok(driver)
     }
 
     /// # Get all drivers
@@ -106,12 +110,11 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Vec<Driver> - all drivers
-    pub fn get_all(connection: &mut PgConnection) -> Vec<Driver> {
+    pub fn get_all(connection: &mut PgConnection) -> QueryResult<Vec<Driver>> {
         use crate::schema::drivers::dsl::*;
 
         drivers
             .load::<Driver>(connection)
-            .expect("Error loading drivers")
     }
 
     /// # Get a driver by id
@@ -124,26 +127,24 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Driver` - the driver
-    pub fn get_by_id(connection: &mut PgConnection, id_in: i32) -> Driver {
+    pub fn get_by_id(connection: &mut PgConnection, id_in: i32) -> QueryResult<Driver> {
         use crate::schema::drivers::dsl::*;
 
         drivers
             .find(id_in)
             .first::<Driver>(connection)
-            .expect("Error loading driver")
     }
 
-    pub fn get_by_ids(connection: &mut PgConnection, ids: Vec<i32>) -> Vec<Driver> {
+    pub fn get_by_ids(connection: &mut PgConnection, ids: Vec<i32>) -> QueryResult<Vec<Driver>> {
         use crate::schema::drivers::dsl::*;
 
         drivers
             .filter(id.eq_any(ids))
             .load::<Driver>(connection)
-            .unwrap()
     }
 
-    pub fn search_with_stats_paginated(conn: &mut PgConnection, driver_name: String, page_size: u32, page: u32) -> Result<Vec<DriverStats>, Error> {
-        match sql_query(format!("
+    pub fn search_with_stats_paginated(conn: &mut PgConnection, driver_name: String, page_size: u32, page: u32) -> QueryResult<Vec<DriverStats>> {
+        sql_query(format!("
             select
                 d.name,
                 d.rating,
@@ -163,14 +164,10 @@ impl Driver {
 
         ))
             .load::<DriverStats>(conn)
-        {
-            Ok(d) => Ok(d),
-            Err(_) => Err(NotFound),
-        }
     }
 
-    pub fn search_with_stats(conn: &mut PgConnection, driver_name: String) -> Result<Vec<DriverStats>, Error> {
-        match sql_query(format!("
+    pub fn search_with_stats(conn: &mut PgConnection, driver_name: String) -> QueryResult<Vec<DriverStats>> {
+        sql_query(format!("
             select
                 d.name,
                 d.rating,
@@ -186,10 +183,7 @@ impl Driver {
             driver_name
         ))
         .load::<DriverStats>(conn)
-        {
-            Ok(d) => Ok(d),
-            Err(_) => Err(NotFound),
-        }
+
     }
 
     /// # Get all drivers with stats
@@ -205,7 +199,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Vec<DriverStats> - stats of all drivers
-    pub fn get_all_with_stats(conn: &mut PgConnection) -> Vec<DriverStats> {
+    pub fn get_all_with_stats(conn: &mut PgConnection) -> QueryResult<Vec<DriverStats>> {
         sql_query(
             "
             select
@@ -221,7 +215,6 @@ impl Driver {
             GROUP BY d.name, d.rating;",
         )
             .load::<DriverStats>(conn)
-        .expect("Error loading driver stats")
     }
 
     /// # Get driver with stats
@@ -236,7 +229,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Vec<DriverStats> - stats of all drivers
-    pub fn get_driver_with_stats(conn: &mut PgConnection, driver_name: String) -> DriverStats {
+    pub fn get_driver_with_stats(conn: &mut PgConnection, driver_name: String) -> QueryResult<DriverStats> {
         sql_query(format!(
             "
             select
@@ -254,7 +247,6 @@ impl Driver {
             driver_name
         ))
         .get_result::<DriverStats>(conn)
-        .expect("Error getting driver stats")
     }
 
     /// # check if a driver exists
@@ -281,14 +273,14 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Driver` - the driver
-    pub fn get_by_name(conn: &mut PgConnection, name_in: &String) -> Result<Driver, Error> {
+    pub fn get_by_name(conn: &mut PgConnection, name_in: &String) -> QueryResult<Driver> {
         use crate::schema::drivers::dsl::*;
         drivers
             .filter(name.like(name_in))
             .first::<Driver>(conn)
     }
 
-    pub fn search_by_name(conn: &mut PgConnection, name_in: &String) -> Result<Vec<Driver>,Error> {
+    pub fn search_by_name(conn: &mut PgConnection, name_in: &String) -> QueryResult<Vec<Driver>> {
         use crate::schema::drivers::dsl::*;
 
         drivers
@@ -296,7 +288,7 @@ impl Driver {
             .load::<Driver>(conn)
     }
 
-    pub fn search_by_name_paginated(conn: &mut PgConnection, name_in: &String, page: i32, page_size:i32) -> Result<Vec<Driver>,Error> {
+    pub fn search_by_name_paginated(conn: &mut PgConnection, name_in: &String, page: i32, page_size:i32) -> QueryResult<Vec<Driver>> {
         use crate::schema::drivers::dsl::*;
 
         drivers
@@ -315,7 +307,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `DriverStats` - the stats of the driver
-    pub fn get_stats(&self, conn: &mut PgConnection) -> DriverStats {
+    pub fn get_stats(&self, conn: &mut PgConnection) -> QueryResult<DriverStats> {
         sql_query(
             "
             select
@@ -333,7 +325,6 @@ impl Driver {
         )
         .bind::<Integer, _>(self.id)
         .get_result::<DriverStats>(conn)
-        .expect("Error loading driver stats")
     }
 
     /// # ensure a driver exists
@@ -349,11 +340,11 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Driver` - the driver
-    pub fn ensure_exists(conn: &mut PgConnection, name: &String) -> Driver {
+    pub fn ensure_exists(conn: &mut PgConnection, name: &String) -> QueryResult<Driver> {
         if !Driver::exists(conn, name) {
             Driver::new(conn, name)
         } else {
-            Driver::get_by_name(conn, name).unwrap()
+            Driver::get_by_name(conn, name)
         }
     }
 
@@ -366,7 +357,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Driver` - the driver
-    pub fn from_lap(conn: &mut PgConnection, lap: Lap) -> Driver {
+    pub fn from_lap(conn: &mut PgConnection, lap: Lap) -> QueryResult<Driver> {
         Driver::get_by_id(conn, lap.driver)
     }
 
@@ -379,7 +370,7 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Vec<Driver>` - the drivers
-    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> Vec<Driver> {
+    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> QueryResult<Vec<Driver>> {
         use crate::schema::drivers::dsl::*;
 
         let driver_ids: Vec<i32> = laps.iter().map(|e| e.driver).collect();
@@ -387,9 +378,21 @@ impl Driver {
         drivers
             .filter(id.eq_any(driver_ids))
             .load::<Driver>(conn)
-            .unwrap()
     }
 
+    /// # get the driver of the lap
+    /// get the driver of the lap. this function returns the driver that has driven the lap.
+    /// this function does not require the connection a connection to the db. instead it requires
+    /// a list of drivers
+    ///
+    /// if the driver is not found we return `None`
+    ///
+    /// ## Arguments
+    /// * `all_drivers` - the drivers
+    /// * `lap` - the lap
+    ///
+    /// ## Returns
+    /// * `Option<Driver>` - the driver
     pub fn from_single_lap_offline(all_drivers: &[Driver], lap: Lap) -> Option<Driver> {
         for driver in all_drivers {
             if driver.id == lap.id {
@@ -400,6 +403,19 @@ impl Driver {
         None
     }
 
+    /// # get the drivers of the laps
+    /// get the drivers of the laps. this function returns the drivers that have driven the laps.
+    /// this function does not require the connection a connection to the db. instead it requires
+    /// a list of drivers
+    ///
+    /// if the driver is not found we return a empty vector
+    ///
+    /// ## Arguments
+    /// * `all_drivers` - the drivers
+    /// * `laps` - the laps
+    ///
+    /// ## Returns
+    /// * `Vec<Driver>` - the drivers
     pub fn from_laps_offline(all_drivers: &[Driver], laps: &[Lap]) -> Vec<Driver> {
         let drivers_map: HashMap<i32, Driver> = all_drivers
             .iter()
@@ -457,9 +473,10 @@ impl Driver {
     /// ## Returns
     /// * `HashMap<Driver, Vec<Lap>>` - the drivers and their laps
     pub fn from_laps_into_map(conn: &mut PgConnection, laps: &[Lap]) -> HashMap<Driver, Vec<Lap>> {
-        let drivers = Driver::from_laps(conn, laps);
-
-        Driver::map_to_laps(drivers, laps)
+        match Driver::from_laps(conn, laps) {
+            Ok(drivers) => Driver::map_to_laps(drivers, laps),
+            Err(_) => HashMap::new(),
+        }
     }
 
     /// convert the driver object to a NewDriver object
@@ -482,9 +499,9 @@ impl Driver {
     ///
     /// ## Returns
     /// * `Vec<Lap>` - the laps
-    pub fn get_laps(&self, conn: &mut PgConnection) -> Vec<Lap> {
+    pub fn get_laps(&self, conn: &mut PgConnection) -> QueryResult<Vec<Lap>> {
         use crate::schema::laps::dsl::*;
-        laps.filter(driver.eq(self.id)).load::<Lap>(conn).unwrap()
+        laps.filter(driver.eq(self.id)).load::<Lap>(conn)
     }
 
     /// # Get stats of a drivers stats for certain laps
@@ -495,17 +512,22 @@ impl Driver {
     ///
     /// ## Returns
     /// * `DriverStats` - the stats
-    pub fn get_stats_of_laps(&self, laps: &Vec<Lap>) -> DriverStats {
-        let correct_laps = &laps
+    pub fn get_stats_of_laps(&self, laps: &Vec<Lap>) -> Option<DriverStats> {
+        let correct_laps:Vec<Lap> = laps
             .iter()
             .filter(|lap| lap.driver == self.id)
             .map(|e| e.to_owned())
             .collect();
 
-        let lap_stats = Lap::get_stats_of_laps(correct_laps);
-        let heat_count = Heat::amount_from_laps(correct_laps);
+        if correct_laps.is_empty() {
+            return None;
+        }
 
-        DriverStats {
+
+        let lap_stats = Lap::get_stats_of_laps(&correct_laps);
+        let heat_count = Heat::amount_from_laps(&correct_laps);
+
+        Some(DriverStats {
             name: self.name.clone(),
             fastest_lap_time: lap_stats.fastest_lap_time,
             avg_lap_time: lap_stats.avg_lap_time,
@@ -513,7 +535,7 @@ impl Driver {
             total_laps: correct_laps.len() as i32,
             total_heats: heat_count as i32,
             rating: self.rating,
-        }
+        })
     }
 
     /// # Get stats of a drivers stats for certain laps
@@ -604,36 +626,47 @@ impl Driver {
         drivers_set.len()
     }
 
+    /// # clear the cache of the driver
+    /// clear the cache of the driver
+    ///
+    /// ## Arguments
+    /// * `rconn` - the redis connection
     pub fn clear_cache(&self, rconn: &mut redis::Connection) {
         // get all keys
         // uri encode the name of the driver
         let encoded_name = self.name.replace(" ", "%20");
-        let mut keys: HashSet<String> = rconn
-            .keys::<String, Vec<String>>(format!("*{}*", encoded_name))
-            .unwrap()
-            .iter()
-            .map(|e| e.to_owned())
-            .collect();
+        let mut keys: Vec<String> = match Redis::keys(rconn, encoded_name) {
+            Ok(keys) => keys,
+            Err(error) => {
+                error!(target:"models/driver:clear_cache", "error while getting keys from redis: {}", error);
+                return;
+            }
+        };
 
+        // search queries
+        match Redis::get_keys(rconn, "*/search/*") {
+            Ok(keys_) => {
+                keys_.iter().for_each(|key| {
+                    keys.push(key.to_string());
+                });
+            }
+            Err(error) => {
+                error!(target:"models/driver:clear_cache", "error while getting search keys from redis: {}", error);
+                return;
+            }
+        }
 
-        // searsh queries
-        rconn.keys::<String, Vec<String>>("*/search/*".to_string())
-            .unwrap()
-            .iter()
-            .for_each(|key| { keys.insert(key.to_owned()); });
-
-        keys.insert("/api/drivers/all".to_string());
-        keys.insert("/api/drivers/all/full".to_string());
-        keys.insert("/api/heats/all".to_string());
-        keys.insert("/api/heats/all/full".to_string());
-        keys.insert("/api/heats/all".to_string());
-        keys.insert("/api/heats/all/full".to_string());
-        keys.insert("/drivers/all".to_string());
+        keys.append(&mut vec!["/api/drivers/all".to_string(),
+                              "/api/drivers/all/full".to_string(),
+                              "/api/heats/all".to_string(),
+                              "/api/heats/all/full".to_string(),
+                              "/api/heats/all".to_string(),
+                              "/api/heats/all/full".to_string(),
+                              "/drivers/all".to_string()
+        ]);
 
         // delete all keys
-        for key in keys {
-            rconn.del::<String, ()>(key).unwrap();
-        }
+        delete_keys!(rconn, keys, "models/driver:clear_cache");
     }
 
     /// # set the rating of a player to a new value
@@ -644,7 +677,7 @@ impl Driver {
     /// * `conn` - the database connection
     /// * `driver_id` - the id of the driver
     /// * `new_rating` - the new rating
-    pub fn set_rating_id(conn: &mut PgConnection, driver_id: i32, new_rating: WengLinRating) {
+    pub fn set_rating_id(conn: &mut PgConnection, driver_id: i32, new_rating: WengLinRating) -> QueryResult<usize> {
         diesel::update(drivers::table)
             .filter(drivers::id.eq(driver_id))
             .set((
@@ -652,7 +685,6 @@ impl Driver {
                 drivers::uncertainty.eq(new_rating.uncertainty),
             ))
             .execute(conn)
-            .unwrap();
     }
 
     /// # set new skill ratings for the current player
@@ -661,8 +693,8 @@ impl Driver {
     /// ## Arguments
     /// * `conn` - the database connection
     /// * `new_rating` - the new rating
-    pub fn set_rating(&self, conn: &mut PgConnection, new_rating: WengLinRating) {
-        Driver::set_rating_id(conn, self.id, new_rating);
+    pub fn set_rating(&self, conn: &mut PgConnection, new_rating: WengLinRating) -> QueryResult<usize> {
+        Driver::set_rating_id(conn, self.id, new_rating)
     }
 
 }

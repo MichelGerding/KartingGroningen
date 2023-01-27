@@ -1,5 +1,6 @@
 mod schema;
 
+use log::{info};
 use karting_groningen_analytics::modules::helpers::handelbars::format::Format;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Rocket, get, launch, routes};
@@ -12,6 +13,7 @@ use karting_groningen_analytics::modules::helpers::handelbars::format_date::Form
 use karting_groningen_analytics::modules::helpers::handelbars::format_heat_type::FormatHeatType;
 use karting_groningen_analytics::modules::helpers::handelbars::format_is_child_kart::FormatIsChildKartHandlebars;
 use karting_groningen_analytics::modules::helpers::handelbars::to_json::ToJson;
+use karting_groningen_analytics::modules::helpers::logging::setup_logging;
 
 use karting_groningen_analytics::routes::{api, driver, heat, kart};
 
@@ -19,14 +21,20 @@ use karting_groningen_analytics::routes::{api, driver, heat, kart};
 
 #[get("/")]
 pub fn index() -> Template {
+
+    info!("index");
     Template::render("index", ())
 }
 
 #[launch]
 async fn rocket() -> Rocket<Build> {
+    setup_logging().expect("Failed to setup logging");
+
+
     // register cron jobs that need to run.
     // these are jobs that either need to effect the database, redis, or both.
-    let _ = register_cron_jobs().await;
+    register_cron_jobs().await;
+
 
     // start the webserver
     rocket::build()

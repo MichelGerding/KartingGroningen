@@ -1,4 +1,5 @@
 use std::thread;
+use log::error;
 // rocket imports
 use rocket::get;
 use rocket::http::Status;
@@ -10,6 +11,9 @@ use crate::modules::helpers::math::Math;
 use crate::{
     AllData, ChartData, ChartDataDataSetData, ChartDataDataset, TableData, TemplateDataHeat,
 };
+use crate::macros::redis::{cache_data_to_url, redis_handle_set_error_no_return};
+use crate::macros::request_caching::cache_template_response;
+use crate::modules::models::driver::sanitize_name;
 // database imports
 use crate::modules::models::general::establish_connection;
 use crate::modules::models::heat::{Heat, HeatDriverInfo};
@@ -17,20 +21,28 @@ use crate::modules::models::lap::Lap;
 use crate::modules::redis::Redis;
 
 #[get("/all")]
-pub fn list_all(origin: &Origin) -> Template {
+pub fn list_all(origin: &Origin) -> Result<Template, Status> {
 
-    // check the cache
-    let r_conn = &mut Redis::connect();
     let uri = origin.path().to_string();
-
-    let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
-    } else {
+    cache_template_response!(
+        "all",
+        uri,
+        "routes/heat:list_all",
+        AllData,
+        || -> Result<AllData, Status> {
         let connection = &mut establish_connection();
-        let heats = Heat::get_all_with_stats(connection);
+        let heats = match Heat::get_all_with_stats(connection) {
+            Ok(e) => e,
+            Err(diesel::result::Error::NotFound) => {
+                return Err(Status::NotFound);
+            }
+            Err(error) => {
+                error!(target:"routes/heat:all", "Error getting heats: {}", error);
+                return Err(Status::InternalServerError);
+            }
+        };
 
-        all_data = AllData {
+        Ok(AllData {
             data_type: "heats".to_string(),
             table_data: TableData {
                 headers: vec![
@@ -54,43 +66,34 @@ pub fn list_all(origin: &Origin) -> Template {
                     })
                     .collect(),
             },
-        };
-
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
-    }
-    Template::render(
-        "all",
-        all_data
-    )
+        })
+    })
 }
 
 #[get("/<heat_id_in>")]
 pub fn single(heat_id_in: String, origin: &Origin) -> Result<Template, Status> {
-    // let sanitized = sanitize_name(&heat_id_in);
-    // if sanitized != heat_id_in {
-    //     return Err(Status::BadRequest)
-    // }
+    // sanitize the input
+    let heat_id_in = sanitize_name(&heat_id_in).to_uppercase();
 
-    let r_conn = &mut Redis::connect();
+
     let uri = origin.path().to_string();
-
-    let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
-    } else {
-
-
+    cache_template_response!(
+        "heat",
+        uri,
+        "routes/heat:single",
+        TemplateDataHeat,
+        || -> Result<TemplateDataHeat, Status> {
         let conn = &mut establish_connection();
 
         // get all data needed
         let heat = Heat::get_by_id(conn, &heat_id_in);
-        let heat_info = heat.unwrap().get_full_info(conn);
+        let heat_info = match heat.unwrap().get_full_info(conn) {
+            Ok(heat_info) => heat_info,
+            Err(error) => {
+                error!(target:"routes/heat:single", "Error: {}", error);
+                return Err(Status::InternalServerError);
+            }
+        };
 
         let mut table_rows: Vec<Vec<String>> = Vec::new();
         let mut datasets: Vec<ChartDataDataset> = Vec::new();
@@ -102,7 +105,7 @@ pub fn single(heat_id_in: String, origin: &Origin) -> Result<Template, Status> {
         }
 
 
-        all_data = TemplateDataHeat {
+        Ok(TemplateDataHeat {
             heat_id: heat_info.heat_id,
             heat_type: heat_info.heat_type,
             start_date: heat_info.start_time,
@@ -122,21 +125,8 @@ pub fn single(heat_id_in: String, origin: &Origin) -> Result<Template, Status> {
                 ],
                 rows: table_rows,
             },
-        };
-
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
-    }
-
-    Ok(Template::render(
-        "heat",
-        all_data
-    ))
+        })
+    })
 }
 
 fn generate_table_row(driver: &HeatDriverInfo) -> Vec<String> {

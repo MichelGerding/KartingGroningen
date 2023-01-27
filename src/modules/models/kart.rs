@@ -9,7 +9,6 @@ use diesel::{select, sql_query};
 use diesel::result::Error;
 
 use identifiable_derive::HasId;
-use redis::Commands;
 use rocket::serde::Deserialize;
 use serde::Serialize;
 
@@ -24,6 +23,10 @@ use rocket::response::Responder;
 use rocket::response::Response;
 use rocket::http::ContentType;
 use json_response_derive::JsonResponse;
+use log::error;
+use crate::macros::database_error_handeler::db_handle_get_error;
+use crate::macros::redis::delete_keys;
+use crate::modules::redis::Redis;
 
 
 use crate::modules::traits::has_id::HasIdTrait;
@@ -143,10 +146,10 @@ impl Kart {
     ///
     /// ## Returns
     /// * `Vec<Kart>` - all karts in the database
-    pub fn get_all(conn: &mut PgConnection) -> Vec<Kart> {
+    pub fn get_all(conn: &mut PgConnection) -> QueryResult<Vec<Kart>> {
         use crate::schema::karts::dsl::karts;
 
-        karts.load::<Kart>(conn).expect("Error loading karts")
+        karts.load::<Kart>(conn)
     }
 
     /// # get the kart of a lap
@@ -158,11 +161,18 @@ impl Kart {
     ///
     /// ## Returns
     /// * `Kart` - the kart of the lap
-    pub fn from_lap(conn: &mut PgConnection, lap: Lap) -> Kart {
-        Kart::from_laps(conn, &*vec![lap])
-            .into_iter()
-            .next()
-            .unwrap()
+    pub fn from_lap(conn: &mut PgConnection, lap: Lap) -> QueryResult<Kart> {
+        match Kart::from_laps(conn, &*vec![lap]) {
+            Ok(karts) => {
+                Ok(karts.into_iter()
+                    .next()
+                    .unwrap())
+            }
+            Err(error) => {
+                error!("Error getting kart from lap: {}", error);
+                Err(error)
+            }
+        }
     }
 
     /// # get the karts of laps
@@ -175,7 +185,7 @@ impl Kart {
     ///
     /// ## Returns
     /// * `Vec<Kart>` - the karts of the laps
-    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> Vec<Kart> {
+    pub fn from_laps(conn: &mut PgConnection, laps: &[Lap]) -> QueryResult<Vec<Kart>> {
         use crate::schema::karts::dsl::{id, karts};
 
         // get all unique kart ids
@@ -184,7 +194,6 @@ impl Kart {
         karts
             .filter(id.eq_any(kart_ids))
             .load::<Kart>(conn)
-            .expect("Error loading karts")
     }
 
     /// # get the karts of laps
@@ -215,11 +224,17 @@ impl Kart {
     ///
     /// ## Returns
     /// * `HashMap<Date, Vec<Lap>>` - the laps per day
-    pub fn get_laps_per_day(&self, conn: &mut PgConnection) -> HashMap<NaiveDate, Vec<Lap>> {
-        let v_laps = Lap::from_kart(conn, self);
+    pub fn get_laps_per_day(&self, conn: &mut PgConnection) -> QueryResult<HashMap<NaiveDate, Vec<Lap>>> {
+        let v_laps = db_handle_get_error!(Lap::from_kart(conn, self), "/models/kart:get_laps_per_day", "laps from kart");
 
         let ids = v_laps.iter().map(|lap| lap.heat).collect::<Vec<i32>>();
-        let heats = Heat::get_from_db_ids(conn, &ids);
+        let heats = match Heat::get_from_db_ids(conn, &ids) {
+            Ok(heats) => heats,
+            Err(error) => {
+                error!("Error getting heats: {}", error);
+                return Err(error);
+            }
+        };
 
         let mut laps_per_day: HashMap<NaiveDate, Vec<Lap>> = HashMap::new();
         for lap in &v_laps {
@@ -234,7 +249,7 @@ impl Kart {
             }
         }
 
-        laps_per_day
+        Ok(laps_per_day)
     }
 
     /// # get laptimes per day
@@ -245,8 +260,14 @@ impl Kart {
     ///
     /// ## Returns
     /// * `HashMap<Date, Vec<f64>>` - the laptimes per day
-    pub fn get_laptimes_per_day(&self, conn: &mut PgConnection) -> HashMap<NaiveDate, Vec<f64>> {
-        let laps_per_day = self.get_laps_per_day(conn);
+    pub fn get_laptimes_per_day(&self, conn: &mut PgConnection) -> QueryResult<HashMap<NaiveDate, Vec<f64>>> {
+        let laps_per_day = match self.get_laps_per_day(conn) {
+            Ok(laps_per_day) => laps_per_day,
+            Err(error) => {
+                error!(target:"models/kart:get_lap_times_per_day", "Error getting laps per day: {}", error);
+                return Err(error);
+            }
+        };
 
         let mut laptimes_per_day: HashMap<NaiveDate, Vec<f64>> = HashMap::new();
         for (date, laps) in laps_per_day {
@@ -254,7 +275,7 @@ impl Kart {
             laptimes_per_day.insert(date, laptimes);
         }
 
-        laptimes_per_day
+        Ok(laptimes_per_day)
     }
 
     /// # get the fastest laptime per day
@@ -267,15 +288,21 @@ impl Kart {
     ///
     /// ## Returns
     /// * `HashMap<Date, f64>` - the fastest laptime per day
-    pub fn get_minimum_laptime_per_day(&self, conn: &mut PgConnection) -> HashMap<NaiveDate, f64> {
-        let days = self.get_laptimes_per_day(conn);
+    pub fn get_minimum_laptime_per_day(&self, conn: &mut PgConnection) -> QueryResult<HashMap<NaiveDate, f64>> {
+        let days = match self.get_laptimes_per_day(conn) {
+            Ok(days) => days,
+            Err(error) => {
+                error!(target:"models/kart:get_minimum_laptime_per_day", "Error getting laptimes per day: {}", error);
+                return Err(error);
+            }
+        };
 
-        days.iter()
+        Ok(days.iter()
             .map(|(date, laps)| {
                 let minimum = laps.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                 (*date, Math::round_float_to_n_decimals(minimum, 2))
             })
-            .collect()
+            .collect())
     }
 
     /// # get the media laptime per day
@@ -288,15 +315,21 @@ impl Kart {
     ///
     /// ## Returns
     /// * `HashMap<Date, f64>` - the median laptime per day
-    pub fn get_median_laptime_per_day(&self, conn: &mut PgConnection) -> HashMap<NaiveDate, f64> {
-        let days = self.get_laptimes_per_day(conn);
+    pub fn get_median_laptime_per_day(&self, conn: &mut PgConnection) -> QueryResult<HashMap<NaiveDate, f64>> {
+        let days = match self.get_laptimes_per_day(conn) {
+            Ok(days) => days,
+            Err(error) => {
+                error!(target:"models/kart:get_median_laptime_per_day", "Error getting laptimes per day: {}", error);
+                return Err(error);
+            }
+        };
 
-        days.iter()
+        Ok(days.iter()
             .map(|(date, laps)| {
                 let median = Math::median(laps.clone());
                 (*date, Math::round_float_to_n_decimals(median, 2))
             })
-            .collect()
+            .collect())
     }
 
     /// # get the average laptime per day
@@ -309,16 +342,22 @@ impl Kart {
     ///
     /// ## Returns
     /// * `HashMap<Date, f64>` - the average laptime per day
-    pub fn get_average_laptime_per_day(&self, conn: &mut PgConnection) -> HashMap<NaiveDate, f64> {
-        let avg_day = self.get_laptimes_per_day(conn);
+    pub fn get_average_laptime_per_day(&self, conn: &mut PgConnection) -> QueryResult<HashMap<NaiveDate, f64>> {
+        let avg_day = match self.get_laptimes_per_day(conn) {
+            Ok(avg_day) => avg_day,
+            Err(error) => {
+                error!(target:"models/kart:get_average_laptime_per_day", "Error getting laptimes per day: {}", error);
+                return Err(error);
+            }
+        };
 
-        avg_day
+        Ok(avg_day
             .iter()
             .map(|(date, laps)| {
                 let avg = laps.iter().sum::<f64>() / laps.len() as f64;
                 (*date, Math::round_float_to_n_decimals(avg, 2))
             })
-            .collect()
+            .collect())
     }
 
     /// # get the stats of all karts per day
@@ -334,7 +373,7 @@ impl Kart {
     pub fn get_stats_per_day_from_db(
         conn: &mut PgConnection,
     ) -> HashMap<Kart, Vec<KartStatsPerDay>> {
-        let kart_stats = diesel::sql_query(format!(
+        let kart_stats = sql_query(format!(
             "
             select
                 k.id,
@@ -493,9 +532,13 @@ impl Kart {
 
     pub fn clear_cache(&self, r_conn: &mut redis::Connection) {
         // get all keys
-        let mut keys = r_conn
-            .keys::<String, Vec<String>>(format!("*{}*", self.number))
-            .expect("Error getting keys from redis");
+        let mut keys = match Redis::get_keys(r_conn, &self.number.to_string()) {
+            Ok(keys) => keys,
+            Err(error) => {
+                error!(target:"model/kart:clear_cache", "Error getting keys: {}", error);
+                return;
+            }
+        };
 
         keys.append(&mut vec![
             "/api/drivers/all".to_string(),
@@ -507,10 +550,7 @@ impl Kart {
             "/karts/all".to_string(),
         ]);
 
-        // delete all keys
-        for key in keys {
-            r_conn.del::<String, ()>(key).expect("Error deleting key");
-        }
+        delete_keys!(r_conn, keys, "models/kart:clear_cache");
     }
 }
 

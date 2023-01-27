@@ -18,92 +18,77 @@ use serde::Serialize;
 use crate::modules::redis::Redis;
 use rocket::http::uri::Origin;
 use rocket::serde::Deserialize;
+use crate::macros::database_error_handeler::db_handle_get_error_http;
+use log::{error};
+use crate::macros::redis::{cache_data_to_url, redis_handle_set_error_no_return};
+use crate::macros::request_caching::cache_template_response;
 
 
 #[get("/all")]
-pub fn list_all(origin: &Origin) -> Template {
-
-
-    let r_conn = &mut Redis::connect();
-
-    let all_data;
+pub fn list_all(origin: &Origin) -> Result<Template, Status> {
     let uri = origin.path().to_string();
-    if Redis::has_data::<String>(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
-    } else {
-        // if not in cache we get the value and store in cache
-        let connection = &mut establish_connection();
-        let driver_stats = Driver::get_all_with_stats(connection);
-        all_data = AllData {
-            data_type: "drivers".to_string(),
-            table_data: TableData {
-                headers: vec![
-                    "Driver".to_string(),
-                    "Fastest Lap".to_string(),
-                    "Median Laptime".to_string(),
-                    "Total Laps".to_string(),
-                    "Total Heats".to_string(),
-                    "Rating".to_string(),
-                    "".to_string(),
-                ],
-                rows: driver_stats
-                    .iter()
-                    .map(|stats| {
-                        vec![
-                            stats.name.clone(),
-                            Math::round_float_to_n_decimals(stats.fastest_lap_time, 2).to_string(),
-                            Math::round_float_to_n_decimals(stats.median_lap_time, 2).to_string(),
-                            stats.total_laps.to_string(),
-                            stats.total_heats.to_string(),
-                            Math::round_float_to_n_decimals(stats.rating, 2).to_string(),
-                        ]
-                    })
-                    .collect(),
-            },
-        };
-
-        // add to cache
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
-    }
-
-
-    Template::render(
+    cache_template_response!(
         "all",
-        all_data
+        uri,
+        "routes/driver:list_all",
+        AllData,
+        || -> Result<AllData, Status> {
+            let connection = &mut establish_connection();
+            match Driver::get_all_with_stats(connection) {
+                Ok(driver_stats) => {
+                    return Ok(AllData {
+                        data_type: "drivers".to_string(),
+                        table_data: TableData {
+                            headers: vec![
+                                "Driver".to_string(),
+                                "Fastest Lap".to_string(),
+                                "Median Laptime".to_string(),
+                                "Total Laps".to_string(),
+                                "Total Heats".to_string(),
+                                "Rating".to_string(),
+                                "".to_string(),
+                            ],
+                            rows: driver_stats
+                                .iter()
+                                .map(|stats| {
+                                    vec![
+                                        stats.name.clone(),
+                                        Math::round_float_to_n_decimals(stats.fastest_lap_time, 2).to_string(),
+                                        Math::round_float_to_n_decimals(stats.median_lap_time, 2).to_string(),
+                                        stats.total_laps.to_string(),
+                                        stats.total_heats.to_string(),
+                                        Math::round_float_to_n_decimals(stats.rating, 2).to_string(),
+                                    ]
+                                })
+                                .collect(),
+                        },
+                    })
+                }
+                Err(_) => {
+                    return Err(Status::InternalServerError);
+                }
+            };
+        }
     )
+
 }
 
 #[get("/<driver_name>")]
 pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> {
-    let sanitized = sanitize_name(&driver_name);
-    if sanitized != driver_name {
-        return Err(Status::BadRequest)
-    }
-
-    // check the cache
-    let r_conn = &mut Redis::connect();
+    let driver_name = sanitize_name(&driver_name);
     let uri = origin.path().to_string();
-
-    let all_data;
-    if Redis::has_data(r_conn, uri.clone()).unwrap() {
-        all_data = serde_json::from_str(&Redis::get_data::<String, String>(r_conn, uri.clone()).unwrap()).unwrap()
-    } else {
-
+    cache_template_response!(
+        "driver",
+        uri,
+        "routes/driver:list_all",
+        SingleResponse,
+        || -> Result<SingleResponse, Status> {
         let conn = &mut establish_connection();
 
-        let driver = match Driver::get_by_name(conn, &driver_name) {
-            Ok(driver) =>  driver,
-            Err(_) => return Err(Status::NotFound),
-        };
-        let laps = &driver.get_laps(conn);
-        let heats = Heat::from_laps(conn, &laps);
-        let karts = Kart::get_all(conn);
+        let driver = db_handle_get_error_http!(Driver::get_by_name(conn, &driver_name), "routes/driver:single", "driver");
+        let laps = db_handle_get_error_http!(driver.get_laps(conn), "routes/driver:single", "laps");
+        let heats = db_handle_get_error_http!(Heat::from_laps(conn, &laps), "routes/driver:single", "heats");
+        let karts = db_handle_get_error_http!(Kart::get_all(conn), "routes/driver:single", "karts");
 
         let mut datasets = Vec::new();
         let mut table_rows: Vec<Vec<String>> = Vec::new();
@@ -130,7 +115,7 @@ pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> 
             datasets.push(generate_data_set(&heat, &laps, driver.clone()));
         }
 
-        all_data = SingleResponse {
+        Ok(SingleResponse {
             name: driver.name.to_string(),
             chart_data: ChartData {
                 labels: datasets.iter().map(|e| e.label.clone()).collect(),
@@ -149,21 +134,8 @@ pub fn single(driver_name: String, origin: &Origin) -> Result<Template, Status> 
                 ],
                 rows: table_rows,
             },
-        };
-
-        let ad = all_data.clone();
-        thread::spawn(move || {
-            let r_conn = &mut Redis::connect();
-
-            let json = serde_json::to_string(&ad).unwrap();
-            Redis::set_data::<String, String>(r_conn, uri, json);
-        });
-    }
-
-    Ok(Template::render(
-        "driver",
-        all_data
-    ))
+        })
+    })
 }
 
 fn generate_data_rows(

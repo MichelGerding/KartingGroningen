@@ -9,6 +9,8 @@ pub mod cron_jobs;
 
 pub mod macros {
     pub mod request_caching;
+    pub mod database_error_handeler;
+    pub mod redis;
 }
 
 pub mod routes {
