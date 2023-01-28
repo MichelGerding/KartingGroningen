@@ -1,4 +1,3 @@
-use dotenvy::dotenv;
 use log::info;
 use karting_groningen_analytics::modules::helpers::logging::setup_logging;
 

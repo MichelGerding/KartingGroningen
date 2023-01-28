@@ -10,7 +10,7 @@ pub fn main() {
 
     let heats = Heat::get_all_chronologicaly(connection);
     for heat in heats {
-        info!(\target:"apply_ratings", "applying ratings of heat: {} ", heat.heat_id);
-        heat.apply_ratings(connection);
+        info!(target:"apply_ratings", "applying ratings of heat: {} ", heat.heat_id);
+        let _ = heat.apply_ratings(connection);
     }
 }

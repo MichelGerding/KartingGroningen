@@ -1,6 +1,7 @@
 use dotenvy::dotenv;
 use log::{error, info, warn};
-use karting_groningen_analytics::errors::{AlreadyExistsError, CustomResult, Error};
+use karting_groningen_analytics::errors::{Error};
+
 
 use karting_groningen_analytics::modules::heat_api::{get_heat_from_api, save_heat};
 use karting_groningen_analytics::modules::helpers::heat::HeatsHelper;
@@ -17,30 +18,30 @@ async fn main() {
     let file_url = "./src/heats.txt";
     let heat_list: Vec<String> = match HeatsHelper::load_heat_ids_from_file(file_url) {
         Ok(heats) => heats,
-        Error::FileDoesNotExistError {} => {
-            error!(target:"load_files-From_heat", "File does not exist: {}", path);
+        Err(Error::FileDoesNotExistError {})  => {
+            error!(target:"load_files-From_heat", "File does not exist: {}", file_url);
             return;
         }
-        Error::PermissionDeniedError {} => {
-            error!(target:"load_files-From_heat", "Permission denied: {}", path);
+        Err(Error::PermissionDeniedError {}) => {
+            error!(target:"load_files-From_heat", "Permission denied: {}", file_url);
             return;
         }
-        _ => unreachable!("Unexpected error: {:?}", error)
+        _ => unreachable!("Unexpected error")
     };
 
     // get the info from the heats and save into database
     let connection = &mut establish_connection();
     for heat_id in heat_list {
-        match get_heat_from_api(heat_id).await {
+        match get_heat_from_api(heat_id.clone()).await {
             Ok(heat) => {
                 match save_heat(connection, heat) {
                     Ok(_) => {
                         info!(target:"load_heats_from_file", "saved heat: {}", heat_id);
                     },
-                    Error::AlreadyExistsError{ .. } => {
+                    Err(Error::AlreadyExistsError{ .. }) => {
                         info!(target:"load_heats_from_file", "heat already exists: {}", heat_id);
                     }
-                    Error::InvalidNameError{ .. } => {
+                    Err(Error::InvalidNameError{ .. }) => {
                         warn!(target:"load_heats_from_file", "invalid driver names in heat {}", heat_id);
                     }
                     _ => {unreachable!()}
