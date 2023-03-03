@@ -12,12 +12,9 @@ interface FilterByLabel {
     [key: string]: ChartDataInput[];
 }
 
-export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
-    const {width, ref} = useResizeDetector();
-    // parse the data
-
+function formatData(inputData: ChartDataInput[], labelKey: string) {
     let data: FilterByLabel = {};
-    dataIn.forEach((d) => {
+    inputData.forEach((d) => {
         let k = d[labelKey];
         // check if k is a valid date
         const date = moment(k, "YYYY-MM-DDTHH:mm");
@@ -32,11 +29,11 @@ export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
         data[k as string].push(d);
     });
 
-    // setup the chart options
-    const options = {
-        chart: {
-            id: "ubhkjnuohigyuvbuhg7yib",
-        },
+    return data
+}
+
+function createChartOption(data: FilterByLabel) {
+    return {
         zoom: {
             enabled: true,
             type: 'x',
@@ -46,9 +43,9 @@ export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
             categories: Object.keys(data).map((k) => moment.unix(parseInt(k)).format("YYYY-MM-DD"))
         },
     }
+}
 
-
-    const series: ApexAxisChartSeries = [];
+function parseDataToLapsPerDay(data: FilterByLabel) {
     const dataArray: {date: string; amount_of_laps: number}[] = [];
     Object.keys(data).forEach((k) => {
         const laps = data[k];
@@ -59,8 +56,7 @@ export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
         })
     });
 
-    // sort by date using moment
-    const sorted = dataArray.sort((a, b) => {
+    return dataArray.sort((a, b) => {
         const aDate = moment(a.date, "YYYY-MM-DDTHH:mm");
         const bDate = moment(b.date, "YYYY-MM-DDTHH:mm");
         if (aDate.isBefore(bDate)) {
@@ -71,17 +67,24 @@ export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
             return 0;
         }
     });
+}
 
-    series.push({
-        name: "Laps",
-        data: sorted.map((k) => k.amount_of_laps),
-    });
+export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
+    const {width, ref} = useResizeDetector();
 
+    const data = formatData(dataIn, labelKey);
+    const options = createChartOption(data)
 
+    const sorted = parseDataToLapsPerDay(data);
 
     const chartWidth = width ?? 500;
     const aspectRatio = 9 / 22; // height/width instead of width/height
     const chartHeight = chartWidth * aspectRatio;
+
+    const series = [{
+        name: "Laps",
+        data: sorted.map((k) => k.amount_of_laps),
+    }];
 
     return (
         <div ref={ref}>

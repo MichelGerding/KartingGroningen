@@ -21,11 +21,8 @@ root.render(
                 <Route path={"/"} element={<Root/>}>
                     <Route path={"/"} element={<HomePage />} />
                     <Route path={"/all/:type"} element={<AllPage />} />
-
                     <Route path={"/karts/:id"} element={<KartDetailPage />} />
-
                     <Route path={"/:type/:id"} element={<DetailPage />} />
-
                     <Route path={"*"} element={<h1>404</h1>}/>
                 </Route>
             </Routes>

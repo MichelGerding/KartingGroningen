@@ -17,10 +17,7 @@ interface FilterByLabel {
     [key: string]: ChartDataInput[];
 }
 
-export default function LapTimeChart({dataIn, labelKey, xKey = "lap_in_heat", showOutlierFilter= true}: LapTmeChartProps) {
-    //TODO:: place dots where the prev and next laptimes are null
-
-    // parse the data
+function parseData(dataIn: ChartDataInput[], labelKey: string) {
     let data: FilterByLabel = {};
     dataIn.forEach((d) => {
         let k = d[labelKey];
@@ -51,35 +48,16 @@ export default function LapTimeChart({dataIn, labelKey, xKey = "lap_in_heat", sh
         data[k as string].push(d);
     });
 
-    const {width, ref} = useResizeDetector();
-    const [showVSC, setShowVSC] = useState(true);
-    const [series, setSeries] = useState<ApexAxisChartSeries>([]);
-    const [shownLabels, setShownLabels] = useState<string[]>(Object.keys(data));
-    const [annotations, setAnnotations] = useState<ApexAnnotations>({});
+    return data;
+}
 
+function generateOptions(legendClick: any, dataIn: ChartDataInput[], fastestLapTime: number, slowestLapTime: number, stdDev: number, annotations: any) {
 
-    const stdDev = Math.sqrt(dataIn.reduce((acc, d) => acc + Math.pow(d.laptime - dataIn.reduce((acc, d) => acc + d.laptime, 0) / dataIn.length, 2), 0) / dataIn.length);
-    // get the minimum in for the charts of type line
-    const fastestLapTime = Math.min(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime));
-    const slowestLapTime = Math.max(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime));
-
-    const options = {
+    return {
         chart: {
             id: "laptimes",
             events: {
-                legendClick: function (chartContext: unknown, seriesIndex: unknown) {
-                    // @ts-ignore
-                    const series = chartContext.series.w.globals.seriesNames;
-                    const label = series[seriesIndex as number];
-
-                    // toggle the label
-                    if (shownLabels.includes(label)) {
-                        setShownLabels(shownLabels.filter((l) => l !== label));
-                    } else {
-                        setShownLabels([...shownLabels, label]);
-                    }
-
-                }
+                legendClick: legendClick
             },
         },
         zoom: {
@@ -114,7 +92,42 @@ export default function LapTimeChart({dataIn, labelKey, xKey = "lap_in_heat", sh
         }
     }
 
+}
 
+export default function LapTimeChart({
+                                         dataIn,
+                                         labelKey,
+                                         xKey = "lap_in_heat",
+                                         showOutlierFilter = true
+                                     }: LapTmeChartProps) {
+
+    const data = parseData(dataIn, labelKey);
+
+    const {width, ref} = useResizeDetector();
+    const [showVSC, setShowVSC] = useState(true);
+    const [series, setSeries] = useState<ApexAxisChartSeries>([]);
+    const [shownLabels, setShownLabels] = useState<string[]>(Object.keys(data));
+    const [annotations, setAnnotations] = useState<ApexAnnotations>({});
+
+
+    const options = generateOptions(
+        function (chartContext: unknown, seriesIndex: unknown) {
+            // @ts-ignore
+            const series = chartContext.series.w.globals.seriesNames;
+            const label = series[seriesIndex as number];
+
+            // toggle the label
+            if (shownLabels.includes(label)) {
+                setShownLabels(shownLabels.filter((l) => l !== label));
+            } else {
+                setShownLabels([...shownLabels, label]);
+            }
+        },
+        dataIn,
+        fastestLaptime(dataIn),
+        slowestLaptime(dataIn),
+        standardDeviation(dataIn),
+        annotations)
 
     // reset the shown labels when the data changes
     // the onld ones are for different data then we currently have loaded
@@ -171,9 +184,6 @@ export default function LapTimeChart({dataIn, labelKey, xKey = "lap_in_heat", sh
         }, 0), 0);
         const avgLaptime = totalLaptime / usedLaps;
 
-        // const totalLaptime = series.filter((s) => shownLabels.includes(s.name)).reduce((acc, s) => acc + s.data.filter((d) => d.x !== null).reduce((acc, d) => acc + (d.y == null ? 0 : d.y), 0), 0);
-        // const usedLaps = series.filter((s) => shownLabels.includes(s.name)).reduce((acc, s) => acc + s.data.length, 0);
-        // const avgLaptime = totalLaptime / usedLaps;
         setAnnotations({
                 yaxis: [{
                     y: avgLaptime,
@@ -236,4 +246,16 @@ export default function LapTimeChart({dataIn, labelKey, xKey = "lap_in_heat", sh
     )
 
 
+}
+
+function fastestLaptime(dataIn: ChartDataInput[]) {
+    return Math.min(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime))
+}
+
+function slowestLaptime(dataIn: ChartDataInput[]) {
+    return Math.max(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime))
+}
+
+function standardDeviation(dataIn: ChartDataInput[]) {
+    return Math.sqrt(dataIn.reduce((acc, d) => acc + Math.pow(d.laptime - dataIn.reduce((acc, d) => acc + d.laptime, 0) / dataIn.length, 2), 0) / dataIn.length);
 }
