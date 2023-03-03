@@ -1,0 +1,81 @@
+.button {
+    background-color: transparent;
+    color: white;
+    border: 1px solid white;
+    padding: 0.5ch 1.5ch;
+
+    overflow: hidden;
+
+    font-weight: 600;
+    clip-path: polygon(
+            0 0,
+            0 0,
+            100% 0,
+            calc(100% + 1px) 0,
+            calc(100% + 1px) 100%,
+            100% 100%,
+            0 100%,
+            0 100%,
+            0 0);
+
+    transition: 0.3s;
+    margin: 5px;
+}
+
+.buttonInverted {
+    margin: 5px;
+    background: white;
+    color: black;
+    border: 1px solid black;
+    padding: 0.5ch 1.5ch;
+
+    overflow: hidden;
+
+    font-weight: 600;
+    clip-path: polygon(
+            0 0,
+            0 0,
+            100% 0,
+            calc(100% + 1px) 0,
+            calc(100% + 1px) 100%,
+            100% 100%,
+            0 100%,
+            0 100%,
+            0 0);
+
+    transition: 0.3s;
+}
+
+
+
+.button:hover {
+    background-color: white;
+    color: black;
+    clip-path: polygon(
+            0 0%,
+            0% 0,
+            calc(100% - 1.25ch) 0,
+            100% 1ch,
+            100% 100%,
+            calc(100% - 1.25ch) 100%,
+            1.25ch 100%,
+            0% calc(100% - 1ch),
+            0% 1ch
+    )
+}
+
+.buttonInverted:hover {
+    background-color: black;
+    color: white;
+    clip-path: polygon(
+            0 0%,
+            0% 0,
+            calc(100% - 1.25ch) 0,
+            100% 1ch,
+            100% 100%,
+            calc(100% - 1.25ch) 100%,
+            1.25ch 100%,
+            0% calc(100% - 1ch),
+            0% 1ch
+    )
+}

@@ -1,0 +1,28 @@
+.main {
+    width: 100%;
+}
+
+.search {
+    color: black !important;
+    border-color: black !important;
+}
+
+.tableControls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.tableButtons {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin-top: 1em;
+}
+
+.tableButtons > button {
+    font-size: 1.25em;
+
+}

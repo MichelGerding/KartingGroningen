@@ -37,7 +37,7 @@ pub fn list_all(origin: &Origin) -> Result<Template, Status> {
         AllDataWithCharts,
         || -> Result<AllDataWithCharts, Status> {
             let connection: &mut PgConnection = &mut establish_connection();
-            let karts_stats = Kart::get_all_with_stats(connection);
+            let karts_stats = Kart::get_all_with_stats(connection, String::from("number"), String::from("asc"));
 
             let table_rows = karts_stats
                 .iter()

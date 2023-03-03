@@ -68,12 +68,21 @@ pub fn get_one_full(kart_number: i32, origin: &Origin) -> Result<ApiKartResult, 
 
 }
 
-#[get("/karts/all")]
-pub fn get_all(origin: &Origin) -> Result<String, Status> {
+#[get("/karts/all?<sort_col>&<sort_dir>")]
+pub fn get_all(origin: &Origin, sort_dir: Option<String>, sort_col: Option<String>) -> Result<String, Status> {
     read_cache_request!(origin);
+    let mut sort_col = sort_col.unwrap_or("number".to_string());
+    let mut sort_dir = sort_dir.unwrap_or("asc".to_string());
+
+    if sort_col.is_empty() {
+        sort_col = "start_time".to_string();
+    }
+    if sort_dir.is_empty() || (sort_dir != "desc" && sort_dir != "asc") {
+        sort_dir = "asc".to_string();
+    }
 
     let conn = &mut establish_connection();
-    let all_karts = Kart::get_all_with_stats(conn);
+    let all_karts = Kart::get_all_with_stats(conn, sort_col, sort_dir);
 
    cache_response!(origin, serde_json::to_string(&all_karts).unwrap());
 }

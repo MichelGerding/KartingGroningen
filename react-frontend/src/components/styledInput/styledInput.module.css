@@ -1,0 +1,52 @@
+.input {
+    width: 100%;
+    max-width: 32ch;
+
+    font-size: 1.25rem;
+    padding: 0.2rem 0.5rem 0.5rem 1ch;
+    color: white;
+    border: none;
+    background: transparent;
+
+    outline: white;
+    border-left: 2px solid white;
+    border-bottom: 2px solid white;
+    transition: 0.3s;
+}
+
+
+.input:focus {
+    background: white;
+    color: black;
+}
+
+.inputAfter {
+    font-size: 1.25rem;
+    position: absolute;
+    pointer-events: none;
+    background: white;
+    height: 2px;
+    width: 100%;
+
+    left: -50%;
+    top: 50%;
+
+    transform: rotate(41.634deg) translate(0, 2px);
+}
+
+.inputWrapper {
+    position: relative;
+    margin-bottom: 1rem;
+    overflow: hidden;
+    clip-path: polygon(
+            0 0%,
+            0% 0,
+            calc(100% - 1.75ch) 0,
+            100% 1.5ch,
+            100% 100%,
+            calc(100% - 1.75ch) 100%,
+            1.75ch 100%,
+            0% calc(100% - 1.5ch),
+            0% 1.5ch
+    );
+}

@@ -1,0 +1,54 @@
+.image {
+    background-size: cover;
+    background-position: center;
+    aspect-ratio: 14/9;
+
+    max-height: 70vh;
+    width: 100vw;
+
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+
+    width: 100%;
+
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(20px);
+    color: white;
+
+    padding: 2rem;
+    aspect-ratio: 1216/319;
+}
+
+.text {
+    max-width: 30%;
+}
+
+
+.ctaHeader {
+    font-size: 2rem;
+}
+
+.ctaIcon {
+    cursor: pointer;
+    height: 2em;
+    fill: white;
+
+    align-self: center;
+    transform: translate(0, -1ch);
+}
+
+.ctaError {
+    color: red;
+    font-size: 0.8rem;
+    font-weight: 600;
+    min-height: 1rem;
+    margin-top: 0;
+}

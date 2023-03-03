@@ -59,6 +59,7 @@ pub async fn register_cron_jobs() {
 
         },
     ).unwrap();
+
     scheduler.add(j).await.unwrap();
     scheduler.start().await.unwrap();
 }

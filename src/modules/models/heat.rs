@@ -378,7 +378,6 @@ impl Heat {
         sql_query(
             "
         select
-            h.id,
             h.heat_id,
             h.heat_type,
             h.start_date as start_time,
@@ -393,6 +392,46 @@ impl Heat {
         )
         .load::<HeatStats>(conn)
     }
+    // q: String, page: Option<i64>, page_size: Option<i64>
+
+    pub fn search(conn: &mut PgConnection, heat_id: &String, page: Option<i64>, page_size: Option<i64>, sort_dir: String, sort_col: String) -> QueryResult<Vec<HeatStats>> {
+
+        let heat_id = heat_id;
+        let mut sql_sry: String = format!(
+            "
+        select
+            h.heat_id,
+            h.heat_type,
+            h.start_date as start_time,
+            CAST(count(l.*) as INT) as amount_of_laps,
+            CAST(count(DISTINCT l.driver) AS INT) as amount_of_drivers,
+            min(l.lap_time) as fastest_lap_time,
+            avg(l.lap_time) as average_lap_time
+        from heats h
+        inner join laps l on h.id = l.heat
+        where h.heat_id like '%{}%'
+        group by h.id, start_time
+        order by {} {}",
+            heat_id,
+            sort_col,
+            sort_dir
+        );
+        if page.is_some() && page_size.is_some() {
+            let page = page.unwrap();
+            let page_size = page_size.unwrap();
+
+            let offset = page * page_size;
+            let limit = page_size;
+
+
+            sql_sry.push_str(&format!("
+                limit {}
+                offset {}", limit, offset));
+
+        }
+
+        sql_query(sql_sry)
+        .load::<HeatStats>(conn) }
 
     /// # get a single heat with stats
     /// get a single heat with the basic stats: lap count, driver count,
@@ -408,7 +447,6 @@ impl Heat {
         sql_query(format!(
             "
         select
-            h.id,
             h.heat_id,
             h.heat_type,
             h.start_date as start_time,
@@ -715,13 +753,7 @@ impl Heat {
         let new_ratings = weng_lin_multi_team(&rating_groups[..], &WengLinConfig::default());
         for (position, driver) in drivers.iter().enumerate() {
             let new_rating = &new_ratings[position];
-            match Driver::set_rating_id(connection, driver.id, new_rating[0]) {
-                Ok(_) => {},
-                Err(error) => {
-                    error!(target:"models/heat:apply_ratings", "Error setting rating for driver: {}", error);
-                    return Err(error);
-                }
-            };
+            Driver::set_rating_id(connection, driver.id, new_rating[0])?;
         }
 
         Ok(true)
@@ -730,8 +762,6 @@ impl Heat {
 
 #[derive(QueryableByName, Serialize, Deserialize, JsonResponse)]
 pub struct HeatStats {
-    #[diesel(sql_type = Integer)]
-    pub id: i32,
     #[diesel(sql_type = VarChar)]
     pub heat_id: String,
     #[diesel(sql_type = VarChar)]

@@ -113,8 +113,7 @@ function lapTimeChart(data, ctx) {
                 enabled: true,
                 callbacks: {
                     title: function(tooltipItem, data) {
-                        let title = data.tooltipText[tooltipItem[0].index];
-                        return title;
+                        return data.tooltipText[tooltipItem[0].index];
                     },
                     label: function(tooltipItem, data) {
                         return tooltipItem.xLabel+' pages';

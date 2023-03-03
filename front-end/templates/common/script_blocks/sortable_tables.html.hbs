@@ -39,9 +39,7 @@
             function getValue(element) {
                 // If you aren't using data-sort and want to make it just the tiniest bit smaller/faster
                 // comment this line and uncomment the next one
-                var value =
-                        (alt_sort && element.getAttribute('data-sort-alt')) || element.getAttribute('data-sort') || element.innerText
-                return value
+                return (alt_sort && element.getAttribute('data-sort-alt')) || element.getAttribute('data-sort') || element.innerText
                 // return element.innerText
             }
             try {
@@ -56,7 +54,7 @@
                 var column_index
                 var nodes = tr.cells
 
-                // Reset thead cells and get column index
+                // Reset thead cells and get column indexPage
                 for (var i = 0; i < nodes.length; i++) {
                     if (nodes[i] === element) {
                         column_index = element.getAttribute('data-sort-col') || i
@@ -104,7 +102,7 @@
                         clone_tbody.appendChild(rows.splice(0, 1)[0])
                     }
 
-                    // And finally replace the unsorted table with the sorted one
+                    // And finally replace the unsorted searchableTable with the sorted one
                     table.replaceChild(clone_tbody, org_tbody)
                 }
             }

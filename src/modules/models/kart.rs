@@ -4,7 +4,7 @@ use chrono::{NaiveDate, NaiveDateTime};
 use diesel::dsl::exists;
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use diesel::sql_types::{Bool, Double, Integer, Timestamp};
+use diesel::sql_types::{Bool, Double, Integer, Text, Timestamp};
 use diesel::{select, sql_query};
 use diesel::result::Error;
 
@@ -437,9 +437,8 @@ impl Kart {
     ///
     /// ## Returns
     /// * `Vec<KartStats>` - the info of all karts
-    pub fn get_all_with_stats(conn: &mut PgConnection) -> Vec<KartStats> {
-        sql_query(
-            "
+    pub fn get_all_with_stats(conn: &mut PgConnection, sort_col: String, sort_dir: String) -> Vec<KartStats> {
+        sql_query(format!("
             select
                 k.number,
                 k.is_child_kart,
@@ -447,10 +446,13 @@ impl Kart {
                 CAST(count(DISTINCT l.driver) AS INT) as driver_count
             from karts k
             inner join laps l on k.id = l.kart_id
-            group by k.id;",
+            group by k.id
+            order by {} {};", sort_col, sort_dir)
         )
-        .load::<KartStats>(conn)
-        .unwrap()
+            .bind::<Text, _>(sort_col)
+            .bind::<Text, _>(sort_dir)
+            .load::<KartStats>(conn)
+            .unwrap()
     }
 
     /// # ensure kart exists

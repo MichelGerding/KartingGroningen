@@ -9,12 +9,6 @@ use rocket_dyn_templates::handlebars::{
 /// {{formatChildKart true}}
 /// {{formatChildKart false}}
 /// ```
-///
-/// ### output
-/// ```
-/// Child Kart
-/// Adult Kart
-/// ```
 #[derive(Clone, Copy)]
 pub struct FormatIsChildKartHandlebars;
 

@@ -22,6 +22,10 @@ pub mod helpers {
     pub mod math;
     pub mod logging;
 
+    pub mod fairings {
+        pub mod cors;
+    }
+
     pub mod handelbars {
         pub mod format;
         pub mod format_date;

@@ -9,7 +9,7 @@ use rocket::{get, FromForm};
 use rocket::http::uri::Origin;
 use serde::{Deserialize, Serialize};
 use json_response_derive::JsonResponse;
-use log::error;
+use log::{error};
 use crate::macros::database_error_handeler::db_handle_get_error_http;
 
 use crate::modules::models::driver::{Driver, DriverStats, sanitize_name};
@@ -59,6 +59,7 @@ pub fn get_one(driver_name: String, origin: &Origin) -> Result<ApiDriver, Status
     // check if the input is valid
     let sanitized = sanitize_name(&driver_name);
     if sanitized != driver_name {
+        println!("{} != {}", sanitized, driver_name);
         return Err(Status::BadRequest);
     }
 
@@ -79,10 +80,10 @@ pub fn get_one(driver_name: String, origin: &Origin) -> Result<ApiDriver, Status
 }
 
 
-#[get("/drivers/search/full?<name>&<page>&<page_size>")]
-pub fn search_full(name: String, page: Option<i32>, page_size: Option<i32>) -> Result<String, Status> {
-    let sanitized = sanitize_name(&name);
-    if sanitized != name {
+#[get("/drivers/search/full?<q>&<page>&<page_size>")]
+pub fn search_full(q: String, page: Option<i32>, page_size: Option<i32>) -> Result<String, Status> {
+    let sanitized = sanitize_name(&q);
+    if sanitized != q {
         return Err(Status::BadRequest);
     }
 
@@ -90,14 +91,15 @@ pub fn search_full(name: String, page: Option<i32>, page_size: Option<i32>) -> R
 
     let drivers;
 
+
     if page.is_none() || page_size.is_none() {
-        drivers = db_handle_get_error_http!(Driver::search_by_name(conn, &name), "routes/api/driver:search_full", "drivers");
+        drivers = db_handle_get_error_http!(Driver::search_by_name(conn, &q), "routes/api/driver:search_full", "drivers");
     } else {
-        drivers = db_handle_get_error_http!(Driver::search_by_name_paginated(conn, &name, page.unwrap(), page_size.unwrap()), "routes/api/driver:search_full", "drivers");
+        drivers = db_handle_get_error_http!(Driver::search_by_name_paginated(conn, &q, page.unwrap(), page_size.unwrap()), "routes/api/driver:search_full", "drivers");
     }
 
 
-    let all_laps_map = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &drivers), "routes/api/driver:search_full", format!("laps as map for drivers `%{}%`", name));
+    let all_laps_map = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &drivers), "routes/api/driver:search_full", format!("laps as map for drivers `%{}%`", q));
 
     let all_laps: Vec<Lap> = all_laps_map
         .iter()
@@ -114,24 +116,36 @@ pub fn search_full(name: String, page: Option<i32>, page_size: Option<i32>) -> R
 }
 
 
-#[get("/drivers/search?<name>&<page>&<page_size>")]
-pub fn search(name: String, page: Option<u32>, page_size: Option<u32>) -> Result<String, Status> {
-    let sanitized = sanitize_name(&name);
-    if sanitized != name {
+#[get("/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>")]
+pub fn search(q: String, page: Option<u32>, page_size: Option<u32>, sort_col: Option<String>, sort_dir: Option<String>) -> Result<String, Status> {
+    let sanitized = sanitize_name(&q);
+    if sanitized != q {
         return Err(Status::BadRequest);
+    }
+
+    let mut sort_col = sort_col.unwrap_or("name".to_string());
+    let mut sort_dir = sort_dir.unwrap_or("asc".to_string());
+
+    if sort_col.is_empty() {
+        sort_col = "name".to_string();
+    }
+    if sort_dir.is_empty() || (sort_dir != "desc" && sort_dir != "asc") {
+        sort_dir = "asc".to_string();
     }
 
     let conn = &mut establish_connection();
 
     let drivers;
     if page.is_none() || page_size.is_none() {
-        drivers = Driver::search_with_stats(conn, name.clone());
+        drivers = Driver::search_with_stats(conn, q.clone(), sort_col, sort_dir);
     } else {
         drivers = Driver::search_with_stats_paginated(
             conn,
-            name.clone(),
+            q.clone(),
             page_size.unwrap(),
-            page.unwrap());
+            page.unwrap(),
+            sort_col,
+            sort_dir,);
     }
 
     let drivers = match drivers {

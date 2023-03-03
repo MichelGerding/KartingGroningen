@@ -1,0 +1,47 @@
+.table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+}
+
+.tableHeader {
+    padding: 0.5em 2ch;
+    color: #7e7f9a;
+    background: white;
+    border-bottom: 2px solid #e02200;
+    position: sticky;
+    top: 0;
+}
+
+
+.tableRow:nth-of-type(even) {
+    background-color: #ECE9E9;
+}
+.tableCell {
+    border-collapse: collapse;
+    padding: 0.5rem;
+}
+
+.emptyTable {
+    text-align: center;
+    padding: 1rem;
+}
+
+.spinnerWrapper {
+    height: 10em;
+    width: 10em;
+}
+
+
+.loadWrapper {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    height: 25em;
+}
+
+.loadWrapper p {
+    font-size: 1.5em;
+}

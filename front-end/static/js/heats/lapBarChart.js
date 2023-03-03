@@ -31,7 +31,7 @@ function createLapBarChart(data, canvas) {
     }
 
 
-    const chart = new Chart(canvas, {
+    new Chart(canvas, {
         type: 'bar',
         data: {
             labels: data.labels,

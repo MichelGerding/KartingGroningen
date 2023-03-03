@@ -2,14 +2,13 @@ use std::collections::HashMap;
 
 use chrono::NaiveDateTime;
 use json_response_derive::JsonResponse;
-use log::{error, info, warn};
+use log::{error};
 use rocket::{FromForm, get, post};
 use rocket::form::Form;
 use rocket::http::ContentType;
 use rocket::http::Status;
 use rocket::http::uri::Origin;
 use rocket::Request;
-use rocket::response::{Flash, Redirect};
 use rocket::response;
 use rocket::response::Responder;
 use rocket::response::Response;
@@ -34,13 +33,10 @@ use crate::modules::redis::Redis;
 
 /// # load a new heat into the db
 #[post("/heats/new", data = "<new_heat>")]
-pub async fn save_one(new_heat: Form<NewHeatFormData>) -> Result<Flash<Redirect>, Status> {
+pub async fn save_one(new_heat: Form<NewHeatFormData>) -> Status {
     let sanitized = sanitize_name(&new_heat.heat_id);
     if sanitized != new_heat.heat_id {
-        return Ok(Flash::error(
-            Redirect::to("/"),
-            format!("|Invalid heat id: {}", new_heat.heat_id),
-        ));
+        return Status::BadRequest;
     }
 
 
@@ -49,61 +45,22 @@ pub async fn save_one(new_heat: Form<NewHeatFormData>) -> Result<Flash<Redirect>
     let heat = new_heat.into_inner().heat_id;
     let response = get_heats_from_api(vec![heat]).await;
     if response.len() == 0 {
-        return Ok(Flash::warning(
-            Redirect::to(format!("/", )),
-            "|Heat not found"));
+        return Status::NotFound;
     }
 
     let heat: WebResponse = response[0].clone();
-    let heat_id = save_heat(conn, heat).unwrap();
+    save_heat(conn, heat).unwrap();
 
-    Ok(Flash::success(
-        Redirect::to(format!("/heats/{}", heat_id)),
-        "Heat saved"))
+    Status::Ok
 }
 
-#[post("/heats/delete/<heat_id>")]
-pub async fn delete(heat_id: String) -> Result<Flash<Redirect>, Status> {
-    let sanitized = sanitize_name(&heat_id);
-    if sanitized != heat_id {
-        return Err(Status::BadRequest);
-    }
 
-    let conn = &mut establish_connection();
-
-    match Heat::get_by_id(conn, &heat_id) {
-        Ok(heat) => match heat.delete(conn) {
-            Ok(_) => {
-                info!("Deleted heat: {}", heat_id);
-                Ok(Flash::success(
-                    Redirect::to("/"),
-                    format!("Deleted heat: {}", heat_id)))
-            },
-            Err(e) => {
-                error!(target:"routes/api/heat:delete", "Tried deleting heat got error: {}", e);
-                return Err(Status::InternalServerError);
-            }
-        },
-        Err(diesel::NotFound) => {
-            warn!(target:"routes/api/heat:delete", "Tried deleting heat but it didn't exist");
-            return Ok(Flash::success(
-                Redirect::to("/"),
-                format!("Heat {} deleted", &heat_id)));
-
-        }
-        Err(e) => {
-            error!(target:"routes/api/heat:delete", "Tried deleting heat got error: {}", e);
-            return Err(Status::InternalServerError);
-        }
-    }
-}
-
-#[get("/heats/<heat_id>")]
+#[get("/heats/<heat_id>", rank=1)]
 pub fn get_one_stats(heat_id: String, origin: &Origin) -> Result<HeatStats, Status> {
-    let sanitized = sanitize_name(&heat_id);
-    if sanitized != heat_id {
-        return Err(Status::BadRequest);
-    }
+    // let sanitized = sanitize_name(&heat_id);
+    // if sanitized != heat_id {
+    //     return Err(Status::BadRequest);
+    // }
 
     read_cache_request!(origin);
 
@@ -114,12 +71,12 @@ pub fn get_one_stats(heat_id: String, origin: &Origin) -> Result<HeatStats, Stat
 }
 
 /***** GETTERS *****/
-#[get("/heats/<heat_id>/full")]
+#[get("/heats/<heat_id>/full", rank=1)]
 pub fn get_one(heat_id: String, origin: &Origin) -> Result<ApiHeat, Status> {
-    let sanitized = sanitize_name(&heat_id);
-    if sanitized != heat_id {
-        return Err(Status::BadRequest);
-    }
+    // let sanitized = sanitize_name(&heat_id);
+    // if sanitized != heat_id {
+    //     return Err(Status::BadRequest);
+    // }
 
     read_cache_request!(origin);
 
@@ -135,6 +92,38 @@ pub fn get_one(heat_id: String, origin: &Origin) -> Result<ApiHeat, Status> {
 
     cache_response!(origin, ApiHeat::new(&heat, &drivers, &laps, &karts));
 }
+
+
+/****** SEARSH ROUTES ******/
+#[get("/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>")]
+pub fn search(q: String, page: Option<i64>, page_size: Option<i64>, sort_dir: Option<String>, sort_col: Option<String>,origin: &Origin) -> Result<String, Status> {
+    let sanitized = sanitize_name(&q);
+    if sanitized != q {
+        return Err(Status::BadRequest);
+    }
+
+    let mut sort_col = sort_col.unwrap_or("start".to_string());
+    let mut sort_dir = sort_dir.unwrap_or("asc".to_string());
+
+    if sort_col.is_empty() {
+        sort_col = "start_time".to_string();
+    }
+    if sort_dir.is_empty() || (sort_dir != "desc" && sort_dir != "asc") {
+        sort_dir = "asc".to_string();
+    }
+
+
+    read_cache_request!(origin);
+
+
+    let conn = &mut establish_connection();
+
+
+    let search_results = db_handle_get_error_http!(Heat::search(conn, &q, page, page_size, sort_dir, sort_col), "/routes/api/heat:search", "search results");
+    cache_response!(origin, serde_json::to_string(&search_results).unwrap());
+}
+
+
 
 /// # get all heats
 /// get all heats, laps, drivers, and karts from database

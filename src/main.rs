@@ -1,11 +1,11 @@
 mod schema;
 
-use log::{info};
 use karting_groningen_analytics::modules::helpers::handelbars::format::Format;
 use rocket::fs::{relative, FileServer};
 use rocket::{Build, Rocket, get, launch, routes};
 use rocket_dyn_templates::Template;
 use karting_groningen_analytics::cron_jobs::register_cron_jobs;
+use karting_groningen_analytics::modules::helpers::fairings::cors::CORS;
 
 // use karting_groningen_analytics::cron_jobs::{load_heat_cron, register_cron_jobs};
 
@@ -21,8 +21,6 @@ use karting_groningen_analytics::routes::{api, driver, heat, kart};
 
 #[get("/")]
 pub fn index() -> Template {
-
-    info!("index");
     Template::render("index", ())
 }
 
@@ -61,6 +59,7 @@ async fn rocket() -> Rocket<Build> {
             // makes it so we can only use data that is actually passed to the template.
             engines.handlebars.set_strict_mode(true);
         }))
+        .attach(CORS)
         // all routes to be mounted.
         // list all we be at /all
         // single will be at /single/<id>
@@ -73,11 +72,12 @@ async fn rocket() -> Rocket<Build> {
             routes![
                 // heats
                 api::heat::save_one,
-                api::heat::delete,
+                // api::heat::delete,
                 api::heat::get_one,
                 api::heat::get_all,
                 api::heat::get_all_ids,
                 api::heat::get_one_stats,
+                api::heat::search,
                 // driver
                 api::driver::search,
                 api::driver::search_full,

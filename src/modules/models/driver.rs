@@ -143,8 +143,8 @@ impl Driver {
             .load::<Driver>(connection)
     }
 
-    pub fn search_with_stats_paginated(conn: &mut PgConnection, driver_name: String, page_size: u32, page: u32) -> QueryResult<Vec<DriverStats>> {
-        sql_query(format!("
+    pub fn search_with_stats_paginated(conn: &mut PgConnection, driver_name: String, page_size: u32, page: u32, sort_col: String, sort_dir: String) -> QueryResult<Vec<DriverStats>> {
+        let q = sql_query(format!("
             select
                 d.name,
                 d.rating,
@@ -157,16 +157,20 @@ impl Driver {
                      inner join laps l on d.id = l.driver
             where d.name like '%{}%'
             GROUP BY d.name, d.rating
-            limit {} offset {}",
+            ORDER BY {} {}
+            limit {} offset {}
+            ",
             driver_name,
+            sort_col,
+            sort_dir,
             page_size,
             page * page_size,
+        ));
 
-        ))
-            .load::<DriverStats>(conn)
+        q.load::<DriverStats>(conn)
     }
 
-    pub fn search_with_stats(conn: &mut PgConnection, driver_name: String) -> QueryResult<Vec<DriverStats>> {
+    pub fn search_with_stats(conn: &mut PgConnection, driver_name: String, sort_col: String, sort_dir: String) -> QueryResult<Vec<DriverStats>> {
         sql_query(format!("
             select
                 d.name,
@@ -179,11 +183,13 @@ impl Driver {
             from drivers d
             inner join laps l on d.id = l.driver
             where d.name like '%{}%'
-            GROUP BY d.name, d.rating;",
-            driver_name
+            GROUP BY d.name, d.rating
+            ORDER BY {} {};",
+            driver_name,
+            sort_col,
+            sort_dir
         ))
         .load::<DriverStats>(conn)
-
     }
 
     /// # Get all drivers with stats

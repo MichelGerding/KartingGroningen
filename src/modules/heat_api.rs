@@ -132,6 +132,13 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<Str
                 let _ = Lap::insert_bulk(conn, &laps);
             }
 
+            match heat_id.apply_ratings(conn) {
+                Ok(_) => {}
+                Err(error) => {
+                    error!(target: "modules/heat_api:save_heat", "error applying ratings for heat({}). (err:{})", &heat_id.heat_id, error)
+                }
+            };
+
             Ok(heat_id.heat_id)
         }
         Err(error) => {
@@ -139,6 +146,8 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<Str
             Err(Error::DatabaseError {})
         }
     }
+
+
 
 
 }
