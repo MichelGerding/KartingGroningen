@@ -20604,3 +20604,121 @@
 [2023-03-03][15:13:24] [rocket::server][WARN] Received SIGINT. Requesting shutdown.
 [2023-03-03][15:13:24] [rocket::server][INFO] Shutdown requested. Waiting for pending I/O...
 [2023-03-03][15:13:24] [rocket::server][INFO] Graceful shutdown completed successfully.
+[2023-03-03][15:43:00] [rocket::launch][INFO] 🔧 Configured for debug.
+[2023-03-03][15:43:00] [rocket::launch_][INFO] address: [1;49;39m0.0.0.0[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] port: [1;49;39m8080[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] workers: [1;49;39m16[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] ident: [1;49;39mRocket[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] limits: [1;49;39mbytes = 8KiB, data-form = 2MiB, file = 1MiB, form = 32KiB, json = 1MiB, msgpack = 1MiB, string = 8KiB[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] temp dir: [1;49;39m/tmp[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] http/2: [1;49;39mtrue[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] keep-alive: [1;49;39m5[0m[1;49;39ms[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] tls: [1;49;39mdisabled[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] shutdown: [1;49;39mctrlc = true, force = true, signals = [SIGTERM], grace = 2s, mercy = 3s[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] log level: [1;49;39mnormal[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] cli colors: [1;49;39mtrue[0m
+[2023-03-03][15:43:00] [rocket::launch][INFO] 📬 [35mRoutes[0m:
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37msave_one[0m[36m)[0m [32mPOST[0m [4;34m/api[0m[34m/heats/new[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all_ids[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/all[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all_ids[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/all[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one_stats[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/<heat_id>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/<kart_number>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one_stats[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/all/full[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all/full[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/all/full[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37msearch_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search/full?<q>&<page>&<page_size>[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/<heat_id>/full[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/<kart_number>/full[0m
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>/full[0m
+[2023-03-03][15:43:00] [rocket::launch][INFO] 📡 [35mFairings[0m:
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [1;49;39mShield[0m ([1;34mliftoff, response, singleton[0m)
+[2023-03-03][15:43:00] [rocket::launch_][INFO] [1;49;39mAdd CORS headers to responses[0m ([1;34mresponse[0m)
+[2023-03-03][15:43:00] [rocket::shield::shield][INFO] 🛡️ [35mShield[0m:
+[2023-03-03][15:43:00] [_][INFO] X-Content-Type-Options: [49;39mnosniff[0m
+[2023-03-03][15:43:00] [_][INFO] X-Frame-Options: [49;39mSAMEORIGIN[0m
+[2023-03-03][15:43:00] [_][INFO] Permissions-Policy: [49;39minterest-cohort=()[0m
+[2023-03-03][15:43:00] [rocket::launch][INFO] 🚀 [1;49;39mRocket has launched from[0m [1;4;49;39mhttp://0.0.0.0:8080[0m
+[2023-03-03][15:43:02] [rocket::server][WARN] Received SIGINT. Requesting shutdown.
+[2023-03-03][15:43:02] [rocket::server][INFO] Shutdown requested. Waiting for pending I/O...
+[2023-03-03][15:43:02] [rocket::server][INFO] Graceful shutdown completed successfully.
+[2023-03-03][15:43:07] [rocket::launch][INFO] 🔧 Configured for debug.
+[2023-03-03][15:43:07] [rocket::launch_][INFO] address: [1;49;39m0.0.0.0[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] port: [1;49;39m8080[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] workers: [1;49;39m16[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] ident: [1;49;39mRocket[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] limits: [1;49;39mbytes = 8KiB, data-form = 2MiB, file = 1MiB, form = 32KiB, json = 1MiB, msgpack = 1MiB, string = 8KiB[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] temp dir: [1;49;39m/tmp[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] http/2: [1;49;39mtrue[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] keep-alive: [1;49;39m5[0m[1;49;39ms[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] tls: [1;49;39mdisabled[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] shutdown: [1;49;39mctrlc = true, force = true, signals = [SIGTERM], grace = 2s, mercy = 3s[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] log level: [1;49;39mnormal[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] cli colors: [1;49;39mtrue[0m
+[2023-03-03][15:43:07] [rocket::launch][INFO] 📬 [35mRoutes[0m:
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37msave_one[0m[36m)[0m [32mPOST[0m [4;34m/api[0m[34m/heats/new[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all_ids[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/all[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all_ids[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/all[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one_stats[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/<heat_id>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/<kart_number>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one_stats[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/all/full[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all/full[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/all/full[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37msearch_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search/full?<q>&<page>&<page_size>[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/<heat_id>/full[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/<kart_number>/full[0m
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>/full[0m
+[2023-03-03][15:43:07] [rocket::launch][INFO] 📡 [35mFairings[0m:
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [1;49;39mShield[0m ([1;34mliftoff, response, singleton[0m)
+[2023-03-03][15:43:07] [rocket::launch_][INFO] [1;49;39mAdd CORS headers to responses[0m ([1;34mresponse[0m)
+[2023-03-03][15:43:07] [rocket::shield::shield][INFO] 🛡️ [35mShield[0m:
+[2023-03-03][15:43:07] [_][INFO] Permissions-Policy: [49;39minterest-cohort=()[0m
+[2023-03-03][15:43:07] [_][INFO] X-Frame-Options: [49;39mSAMEORIGIN[0m
+[2023-03-03][15:43:07] [_][INFO] X-Content-Type-Options: [49;39mnosniff[0m
+[2023-03-03][15:43:07] [rocket::launch][INFO] 🚀 [1;49;39mRocket has launched from[0m [1;4;49;39mhttp://0.0.0.0:8080[0m
+[2023-03-03][15:43:10] [rocket::server][INFO] [32mGET[0m [34m/api/heats/search?q=&page=0&page_size=50&sort_col=start_time&sort_dir=asc[0m:
+[2023-03-03][15:43:10] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:10] [rocket::server][INFO] [32mGET[0m [34m/api/heats/search?q=&page=0&page_size=50&sort_col=start_time&sort_dir=undefined[0m:
+[2023-03-03][15:43:10] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:43:11] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:43:11] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:43:11] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:43:11] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:43:12] [rocket::server][INFO] [32mGET[0m [34m/api/heats/C9855916612B41FB98C786F86059C866/full[0m:
+[2023-03-03][15:43:12] [_][INFO] Matched: [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/<heat_id>/full[0m
+[2023-03-03][15:43:12] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:43:12] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:43:16] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/dennis%20gerding/full[0m:
+[2023-03-03][15:43:16] [_][INFO] Matched: [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>/full[0m
+[2023-03-03][15:43:17] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:43:17] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:44:24] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/search?q=&page=0&page_size=50&sort_col=name&sort_dir=asc[0m:
+[2023-03-03][15:44:24] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:44:25] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:44:25] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:44:25] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/search?q=&page=0&page_size=50&sort_col=name&sort_dir=undefined[0m:
+[2023-03-03][15:44:25] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:44:25] [rocket::server][INFO] [32mGET[0m [34m/api/karts/all?q=&page=0&page_size=50&sort_col=number&sort_dir=asc[0m:
+[2023-03-03][15:44:25] [_][INFO] Matched: [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:44:25] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:44:25] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:44:25] [rocket::server][INFO] [32mGET[0m [34m/api/karts/all?q=&page=0&page_size=50&sort_col=number&sort_dir=undefined[0m:
+[2023-03-03][15:44:25] [_][INFO] Matched: [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:44:26] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:44:26] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:44:26] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:44:26] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:44:26] [rocket::server][INFO] [32mGET[0m [34m/api/karts/1/full[0m:
+[2023-03-03][15:44:26] [_][INFO] Matched: [36m([0m[37mget_one_full[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/<kart_number>/full[0m
+[2023-03-03][15:44:27] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:44:27] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:49:21] [rocket::server][WARN] Received SIGINT. Requesting shutdown.
+[2023-03-03][15:49:21] [rocket::server][INFO] Shutdown requested. Waiting for pending I/O...
+[2023-03-03][15:49:21] [rocket::server][INFO] Graceful shutdown completed successfully.

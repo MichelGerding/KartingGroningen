@@ -38,7 +38,7 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .chain(fern::log_file("program.log").unwrap());
+        .chain(fern::log_file("../../../program.log").unwrap());
 
     let stdout_logger_config = Dispatch::new()
         .format(|out, message, record| {

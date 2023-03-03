@@ -39,7 +39,7 @@ export default function DetailPage() {
 
     // get the data from the backend
     const fetchData = async () => {
-        const response = await fetch(`http://localhost:8080/api/${type}/${id}/full`);
+        const response = await fetch(`/api/${type}/${id}/full`);
         let data = await response.json() as any;
 
         let newChartData: ChartDataInput[] = [];

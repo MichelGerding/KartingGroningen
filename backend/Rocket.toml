@@ -2,7 +2,7 @@
 address = "0.0.0.0"
 
 [release]
-port = 80
+port = 8089
 
 [debug]
 port = 8080

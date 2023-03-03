@@ -20,7 +20,7 @@ export default function AllPage() {
 
     const keys = allKeys[type];
 
-    let endpoint = `http://localhost:8080/api/${type}/` + (type === "karts" ? "all" : "search");
+    let endpoint = `/api/${type}/` + (type === "karts" ? "all" : "search");
 
     return (
         <div style={{

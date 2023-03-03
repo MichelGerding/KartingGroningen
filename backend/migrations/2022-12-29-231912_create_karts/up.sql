@@ -8,7 +8,7 @@ create table public.Karts
 );
 
 ALTER TABLE Laps
-    ADD COLUMN "kart_id" INT NOT NULL;
+    ADD COLUMN "kart_id" INT;
 
 alter table Laps
     add constraint fk_laps_kart

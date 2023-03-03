@@ -1,0 +1,20 @@
+version: "3"
+
+services:
+  backend:
+    build: backend
+
+  nginx:
+    image: nginx:latest
+    container_name: kart_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    links:
+      - "backend:api"
+      - "frontend:fe"
+
+  frontend:
+    build: frontend
+

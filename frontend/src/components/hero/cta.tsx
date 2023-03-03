@@ -24,7 +24,7 @@ export default function Cta() {
             body: formData
         }
 
-        fetch(`http://localhost:8080/api/heats/new`, requestOptions)
+        fetch(`/api/heats/new`, requestOptions)
             .then(response => {
                 if (response.status === 200) {
                     return response.json();
