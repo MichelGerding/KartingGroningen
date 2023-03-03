@@ -25,12 +25,4 @@ pub mod helpers {
     pub mod fairings {
         pub mod cors;
     }
-
-    pub mod handelbars {
-        pub mod format;
-        pub mod format_date;
-        pub mod format_heat_type;
-        pub mod format_is_child_kart;
-        pub mod to_json;
-    }
 }

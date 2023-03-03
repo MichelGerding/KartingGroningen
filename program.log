@@ -20573,3 +20573,34 @@
 [2023-03-03][15:09:45] [_][INFO] Matched: [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>/full[0m
 [2023-03-03][15:09:45] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
 [2023-03-03][15:09:45] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:12] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/a.%20aabed/full[0m:
+[2023-03-03][15:11:12] [_][INFO] Matched: [36m([0m[37mget_one[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/<driver_name>/full[0m
+[2023-03-03][15:11:13] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:13] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:15] [rocket::server][INFO] [32mGET[0m [34m/api/heats/search?q=&page=0&page_size=50&sort_col=start_time&sort_dir=asc[0m:
+[2023-03-03][15:11:15] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:15] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:15] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:15] [rocket::server][INFO] [32mGET[0m [34m/api/heats/search?q=&page=0&page_size=50&sort_col=start_time&sort_dir=undefined[0m:
+[2023-03-03][15:11:15] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/heats/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:16] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:16] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:16] [rocket::server][INFO] [32mGET[0m [34m/api/karts/all?q=&page=0&page_size=50&sort_col=number&sort_dir=asc[0m:
+[2023-03-03][15:11:16] [_][INFO] Matched: [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:16] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:16] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:16] [rocket::server][INFO] [32mGET[0m [34m/api/karts/all?q=&page=0&page_size=50&sort_col=number&sort_dir=undefined[0m:
+[2023-03-03][15:11:16] [_][INFO] Matched: [36m([0m[37mget_all[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/karts/all?<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:17] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:17] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:18] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/search?q=&page=0&page_size=50&sort_col=name&sort_dir=asc[0m:
+[2023-03-03][15:11:18] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:18] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:18] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:11:18] [rocket::server][INFO] [32mGET[0m [34m/api/drivers/search?q=&page=0&page_size=50&sort_col=name&sort_dir=undefined[0m:
+[2023-03-03][15:11:18] [_][INFO] Matched: [36m([0m[37msearch[0m[36m)[0m [32mGET[0m [4;34m/api[0m[34m/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>[0m
+[2023-03-03][15:11:19] [_][INFO] [1;49;39mOutcome:[0m [49;32mSuccess[0m
+[2023-03-03][15:11:19] [_][INFO] [32mResponse succeeded.[0m
+[2023-03-03][15:13:24] [rocket::server][WARN] Received SIGINT. Requesting shutdown.
+[2023-03-03][15:13:24] [rocket::server][INFO] Shutdown requested. Waiting for pending I/O...
+[2023-03-03][15:13:24] [rocket::server][INFO] Graceful shutdown completed successfully.

@@ -14,10 +14,6 @@ pub mod macros {
 }
 
 pub mod routes {
-    pub mod driver;
-    pub mod heat;
-    pub mod kart;
-
     pub mod api {
         pub mod driver;
         pub mod heat;

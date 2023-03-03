@@ -1,6 +1,5 @@
 [default]
 address = "0.0.0.0"
-template_dir="front-end/templates"
 
 [release]
 port = 80

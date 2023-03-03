@@ -47,54 +47,5 @@ macro_rules! cache_response {
     }
 }
 
-macro_rules! cache_template_response {
-    ($template:expr, $uri:expr, $logging_target:expr, $data_type:ty, $not_cached:expr) => {
-        match &mut Redis::connect() {
-            Ok(r_conn) => {
-                let has_data = match Redis::has_data(r_conn, $uri.clone()) {
-                    Ok(b) => b,
-                    Err(error) => {
-                        error!(target: $logging_target, "Error checking redis for data: {}", error);
-                        return Err(Status::InternalServerError);
-                    }
-                };
-
-                if has_data {
-                    match Redis::get_data::<String, String>(r_conn, $uri.clone()) {
-                        Ok(d) => {
-                            Ok(Template::render(
-                                $template,
-                                serde_json::from_str::<$data_type>(&d).unwrap()
-                            ))
-                        }
-                        Err(error) => {
-                            error!(target: $logging_target, "Error getting data from redis: {}", error);
-                            return Err(Status::InternalServerError);
-                        }
-                    }
-                } else {
-                    let data = $not_cached();
-                    match data {
-                        Ok(d) => {
-                             cache_data_to_url!(d, $uri, $logging_target);
-                            Ok(Template::render($template, d))
-                        }
-                        Err(error) => {
-                            error!(target: $logging_target, "Error loading page data: {}", error);
-                            return Err(Status::InternalServerError);
-                        }
-                    }
-                }
-            }
-            Err(error) => {
-                error!(target: $logging_target, "Error connecting to redis: {}", error);
-                return Err(Status::InternalServerError);
-            }
-        }
-    }
-}
-
-
 pub(crate) use read_cache_request;
 pub(crate) use cache_response;
-pub(crate) use cache_template_response;
