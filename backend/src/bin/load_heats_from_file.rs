@@ -29,7 +29,7 @@ async fn main() {
     // get the info from the heats and save into database
     for heat_id in heat_list {
         match get_heat_from_api(heat_id.clone()).await {
-            Ok(heat) => match save_heat(heat) {
+            Ok(heat) => match save_heat(heat).await {
                 Ok(_) => {
                     info!(target:"load_heats_from_file", "saved heat: {}", heat_id);
                 }
