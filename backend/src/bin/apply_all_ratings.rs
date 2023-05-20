@@ -1,7 +1,6 @@
 use karting_groningen_analytics::modules::helpers::logging::setup_logging;
-use karting_groningen_analytics::modules::models::session::Session;
+use karting_groningen_analytics::modules::database::models::session::Session;
 use log::info;
-use rocket::http::private::cookie::Expiration::Session;
 
 #[tokio::main]
 pub async fn main() {
