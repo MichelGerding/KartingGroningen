@@ -51,9 +51,9 @@ tokio = { version = "1.23", features = ["full"] }
 tokio-cron-scheduler = { version = "0.9.3", features=["tokio-postgres"] }
 
 # custom modules
-identifiable-derive = { version = "*", path = "../lib/identifiable-derive" }
-json-response-derive = {version = "*", path = "../lib/json-response-derive" }
-task_queue = { version = "*", path = "../lib/task_queue"}
+identifiable-derive = { version = "*", path = "src/lib/identifiable-derive" }
+json-response-derive = {version = "*", path = "src/lib/json-response-derive" }
+task_queue = { version = "*", path = "src/lib/task_queue" }
 
 [build-dependencies]
 cornucopia = "0.9.0"

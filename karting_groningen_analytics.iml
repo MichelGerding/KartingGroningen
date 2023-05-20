@@ -11,15 +11,15 @@
       <sourceFolder url="file://$MODULE_DIR$/backend/src/modules/task_queue/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/desktop/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/migration/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/lib/task_queue/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/backend/src/lib/migration/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/backend/src/lib/task_queue/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/frontend/build" />
       <excludeFolder url="file://$MODULE_DIR$/frontend/node_modules" />
       <excludeFolder url="file://$MODULE_DIR$/backend/src/modules/task_queue/target" />
       <excludeFolder url="file://$MODULE_DIR$/desktop/target" />
       <excludeFolder url="file://$MODULE_DIR$/test_/target" />
-      <excludeFolder url="file://$MODULE_DIR$/lib/migration/target" />
-      <excludeFolder url="file://$MODULE_DIR$/lib/task_queue/target" />
+      <excludeFolder url="file://$MODULE_DIR$/backend/src/lib/migration/target" />
+      <excludeFolder url="file://$MODULE_DIR$/backend/src/lib/task_queue/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

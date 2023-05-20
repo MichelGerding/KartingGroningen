@@ -24,31 +24,18 @@ from (SELECT *
                                    || E'\n);' AS ddl,
 
                                tabledefinition.table_name
-                        FROM (SELECT table_name,
-                                     column_name,
-                                     data_type   as type,
-                                     CASE
+                        FROM (
+                                 -- get the information of the table
+                                 SELECT table_name,
+                                        column_name,
+                                        data_type as type,
+                                        CASE
                                             WHEN is_nullable = 'NO' THEN 'NOT NULL'::text
                                             ELSE 'NULL'::text
-                                            END                              AS not_null
+                                            END   AS not_null
 
-                              FROM information_schema.columns
-                              ORDER BY ordinal_position) tabledefinition
-                             -- get the information of the table
---                                  SELECT c.relname                            AS TABLE_NAME,
---                                         a.attname                            AS COLUMN_NAME,
---                                         format_type(a.atttypid, a.atttypmod) AS TYPE,
---                                         CASE
---                                             WHEN a.attnotnull THEN 'NOT NULL'::text
---                                             ELSE 'NULL'::text
---                                             END                              AS not_null
---                                  FROM pg_class c,
---                                       pg_attribute a,
---                                       pg_type t
---                                  WHERE a.attnum > 0
---                                    AND a.attrelid = c.oid
---                                    AND a.atttypid = t.oid
---                                  ORDER BY a.attnum) tabledefinition
+                                 FROM information_schema.columns
+                                 ORDER BY ordinal_position) tabledefinition
                         GROUP BY tabledefinition.table_name) AS gettabledll
                WHERE TABLE_NAME IN (
                    -- get the tablenames that are public

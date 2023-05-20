@@ -1,0 +1,14 @@
+[package]
+name = "desktop"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+simetry = "0.0.3"
+sysinfo = "0.29.0"
+tokio = "1.28.0"
+
+
+bincode = { version="2.0.0-rc.2"}
