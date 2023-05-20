@@ -5,11 +5,13 @@ use log::{error, info, warn};
 use karting_groningen_analytics::modules::heat_api::{get_heat_from_api, save_heat};
 use karting_groningen_analytics::modules::helpers::heat::HeatsHelper;
 use karting_groningen_analytics::modules::helpers::logging::setup_logging;
+use karting_groningen_analytics::modules::database::models::general::setup_pool;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
     setup_logging().expect("failed to setup logging");
+    setup_pool().await;
 
     // get all the heats stored in the file
     let file_url = "./src/heats.txt";
