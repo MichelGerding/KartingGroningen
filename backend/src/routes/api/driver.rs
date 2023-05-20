@@ -2,26 +2,23 @@ use rocket::http::{ContentType, Status};
 use rocket::request::Request;
 use rocket::response::{self, Responder, Response};
 
-use std::collections::HashMap;
 use chrono::NaiveDateTime;
+use std::collections::HashMap;
 
-use rocket::{get, FromForm};
-use rocket::http::uri::Origin;
-use serde::{Deserialize, Serialize};
 use json_response_derive::JsonResponse;
-use log::{error};
-use crate::macros::database_error_handeler::db_handle_get_error_http;
+use log::error;
+use rocket::http::uri::Origin;
+use rocket::{get, FromForm};
+use serde::{Deserialize, Serialize};
 
-use crate::modules::models::driver::{Driver, DriverStats, sanitize_name};
-use crate::modules::models::general::establish_connection;
-use crate::modules::models::heat::Heat;
-use crate::modules::models::kart::Kart;
-use crate::modules::models::lap::Lap;
-use crate::routes::api::heat::ApiLap;
+use crate::modules::database::models::driver::{sanitize_name, Driver, DriverStats};
+use crate::modules::database::models::session::Session;
+use crate::modules::database::models::vehicle::Vehicle;
+use crate::modules::database::models::lap::Lap;
 use crate::modules::redis::Redis;
+use crate::routes::api::heat::ApiLap;
 
-use crate::macros::request_caching::{read_cache_request, cache_response};
-
+use crate::macros::request_caching::{cache_response, read_cache_request};
 /**************************************************************************************************/
 /**************** ROUTES **************************************************************************/
 /**************************************************************************************************/
@@ -31,9 +28,8 @@ pub struct Paginated {
     pub page: u32,
 }
 
-
 #[get("/drivers/<driver_name>", rank = 1)]
-pub fn get_one_stats(driver_name: String, origin: &Origin) -> Result<DriverStats, Status> {
+pub async fn get_one_stats(driver_name: String, origin: &Origin<'_> ) -> Result<DriverStats, Status> {
     let sanitized = sanitize_name(&driver_name);
     if sanitized != driver_name {
         return Err(Status::BadRequest);
@@ -41,21 +37,13 @@ pub fn get_one_stats(driver_name: String, origin: &Origin) -> Result<DriverStats
 
     read_cache_request!(origin);
 
-    let connection = &mut establish_connection();
-    let driver = match Driver::get_driver_with_stats(connection, driver_name) {
-        Ok(driver) => driver,
-        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
-        Err(error) => {
-            error!(target:"routes/api/driver:get_one_stats", "Error getting driver: {}", error);
-            return Err(Status::InternalServerError);
-        }
-    };
+    let driver = Driver::get_driver_with_stats(driver_name).await;
 
     cache_response!(origin, driver);
 }
 
 #[get("/drivers/<driver_name>/full", rank = 1)]
-pub fn get_one(driver_name: String, origin: &Origin) -> Result<ApiDriver, Status> {
+pub async fn get_one(driver_name: String, origin: &Origin<'_>) -> Result<ApiDriver, Status> {
     // check if the input is valid
     let sanitized = sanitize_name(&driver_name);
     if sanitized != driver_name {
@@ -67,39 +55,28 @@ pub fn get_one(driver_name: String, origin: &Origin) -> Result<ApiDriver, Status
     // faster to check input then to make a request to the cache
     read_cache_request!(origin);
 
-    let conn = &mut establish_connection();
-    let driver = db_handle_get_error_http!(Driver::get_by_name(conn, &driver_name), "routes/api/driver:get_one", "driver");
-
-    let laps = db_handle_get_error_http!(driver.get_laps(conn), "routes/api/driver:get_one", "laps");
-    let heats = db_handle_get_error_http!(Heat::from_laps(conn, &laps), "routes/api/driver:get_one", "heats");
-    let karts = db_handle_get_error_http!(Kart::from_laps(conn, &laps), "routes/api/driver:get_one", "karts");
+    let driver = Driver::get_by_name(&driver_name).await;
+    let laps = driver.get_laps().await;
+    let heats = Session::from_laps(&laps).await;
+    let karts = Vehicle::from_laps(&laps).await;
 
     let api_driver = ApiDriver::new(&driver, &heats, &laps, &karts);
-
     cache_response!(origin, api_driver.clone());
 }
 
-
 #[get("/drivers/search/full?<q>&<page>&<page_size>")]
-pub fn search_full(q: String, page: Option<i32>, page_size: Option<i32>) -> Result<String, Status> {
+pub async fn search_full(q: String, page: Option<i32>, page_size: Option<i32>) -> Result<String, Status> {
     let sanitized = sanitize_name(&q);
     if sanitized != q {
         return Err(Status::BadRequest);
     }
 
-    let conn = &mut establish_connection();
+    let drivers = Driver::search_by_name(
+        &q,
+        page.unwrap_or(0),
+        page_size.unwrap_or(500)).await;
 
-    let drivers;
-
-
-    if page.is_none() || page_size.is_none() {
-        drivers = db_handle_get_error_http!(Driver::search_by_name(conn, &q), "routes/api/driver:search_full", "drivers");
-    } else {
-        drivers = db_handle_get_error_http!(Driver::search_by_name_paginated(conn, &q, page.unwrap(), page_size.unwrap()), "routes/api/driver:search_full", "drivers");
-    }
-
-
-    let all_laps_map = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &drivers), "routes/api/driver:search_full", format!("laps as map for drivers `%{}%`", q));
+    let all_laps_map = Lap::from_drivers_as_map(&drivers).await;
 
     let all_laps: Vec<Lap> = all_laps_map
         .iter()
@@ -108,16 +85,22 @@ pub fn search_full(q: String, page: Option<i32>, page_size: Option<i32>) -> Resu
         .map(|e| e.to_owned())
         .collect();
 
-    let all_heats = db_handle_get_error_http!(Heat::from_laps(conn, &all_laps), "routes/api/driver:search_full", "heats");
-    let all_karts = db_handle_get_error_http!(Kart::from_laps(conn, &all_laps), "routes/api/driver:search_full", "karts");
+    let all_heats = Session::from_laps(&all_laps).await;
+    let all_karts = Vehicle::from_laps(&all_laps).await;
 
-    let api_drivers: Vec<ApiDriver> = ApiDriver::bulk_new(&drivers, &all_laps_map, &all_heats, &all_karts);
+    let api_drivers: Vec<ApiDriver> =
+        ApiDriver::bulk_new(&drivers, &all_laps_map, &all_heats, &all_karts);
     Ok(serde_json::to_string(&api_drivers).unwrap())
 }
 
-
 #[get("/drivers/search?<q>&<page>&<page_size>&<sort_col>&<sort_dir>")]
-pub fn search(q: String, page: Option<u32>, page_size: Option<u32>, sort_col: Option<String>, sort_dir: Option<String>) -> Result<String, Status> {
+pub async fn search(
+    q: String,
+    page: Option<u32>,
+    page_size: Option<u32>,
+    sort_col: Option<String>,
+    sort_dir: Option<String>,
+) -> Result<String, Status> {
     let sanitized = sanitize_name(&q);
     if sanitized != q {
         return Err(Status::BadRequest);
@@ -133,69 +116,27 @@ pub fn search(q: String, page: Option<u32>, page_size: Option<u32>, sort_col: Op
         sort_dir = "asc".to_string();
     }
 
-    let conn = &mut establish_connection();
 
-    let drivers;
-    if page.is_none() || page_size.is_none() {
-        drivers = Driver::search_with_stats(conn, q.clone(), sort_col, sort_dir);
-    } else {
-        drivers = Driver::search_with_stats_paginated(
-            conn,
-            q.clone(),
-            page_size.unwrap(),
-            page.unwrap(),
-            sort_col,
-            sort_dir,);
-    }
+    let drivers = Driver::search_with_stats(
+        q.clone(),
+        page_size.unwrap_or(10),
+        page.unwrap_or(1),
+        sort_col,
+        sort_dir,
+    ).await;
 
-    let drivers = match drivers {
-        Ok(drivers) => drivers,
-        Err(_) => {
-            return Err(Status::NotFound);
-        }
-    };
+    let drivers = drivers;
 
     Ok(serde_json::to_string(&drivers).unwrap())
 }
 
-
 #[get("/drivers/all")]
-pub fn get_all_ids(origin: &Origin) -> Result<String, Status> {
+pub async fn get_all_ids(origin: &Origin<'_>) -> Result<String, Status> {
     read_cache_request!(origin);
 
-    let conn = &mut establish_connection();
-    let drivers = match Driver::get_all_with_stats(conn) {
-        Ok(drivers) => serde_json::to_string(&drivers).unwrap(),
-        Err(diesel::result::Error::NotFound) => return Err(Status::NotFound),
-        Err(_) => return Err(Status::InternalServerError),
-    };
-
-    cache_response!(origin, drivers);
-}
-
-
-/// # get all drivers
-/// get all heats, laps, drivers, and karts from database
-///
-///
-/// WARNING!! DO NOT USE UNLESS NECESAIRY
-/// large amounts of data.
-/// dumps id less database
-#[get("/drivers/all/full")]
-pub fn get_all(origin: &Origin) -> Result<String, Status> {
-    read_cache_request!(origin);
-
-
-    let conn = &mut establish_connection();
-
-    let all_heats = db_handle_get_error_http!(Heat::get_all(conn), "routes/api/driver:get_all", "heats");
-    let all_drivers = db_handle_get_error_http!(Driver::get_all(conn), "routes/api/driver:get_all", "heats");
-    let all_karts = db_handle_get_error_http!(Kart::get_all(conn), "routes/api/driver:get_all", "heats");
-    let all_laps = db_handle_get_error_http!(Lap::from_drivers_as_map(conn, &all_drivers), "routes/api/driver:get_all", "laps from drivers as map");
-
-    let api_drivers: Vec<ApiDriver> = ApiDriver::bulk_new(&all_drivers, &all_laps, &all_heats, &all_karts);
-
-    cache_response!(origin, serde_json::to_string(&api_drivers).unwrap());
+    let drivers = Driver::get_all_with_stats().await;
+    Ok(serde_json::to_string(&drivers).unwrap())
+    // cache_response!(origin, drivers);
 }
 
 /**************************************************************************************************/
@@ -225,7 +166,7 @@ impl ApiDriver {
     /// * `laps` - The laps driven in the heat
     /// * `drivers` - The drivers that drove in the heat
     /// * `karts` - The karts that were driven in the heat
-    pub fn new(driver: &Driver, heats: &[Heat], laps: &[Lap], karts: &[Kart]) -> ApiDriver {
+    pub fn new(driver: &Driver, heats: &[Session], laps: &[Lap], karts: &[Vehicle]) -> ApiDriver {
         ApiDriver {
             name: driver.name.to_string(),
             rating: driver.rating,
@@ -243,8 +184,11 @@ impl ApiDriver {
                         heat_id: heat.heat_id.to_string(),
                         start_date: heat.start_date,
                         kart: ApiKart {
-                            number: kart.number,
-                            is_child_kart: kart.is_child_kart,
+                            number: kart.number.clone(),
+                            brand: kart.brand.clone(),
+                            model: kart.model.clone(),
+                            horsepower: kart.horsepower.clone(),
+                            modified: kart.modified.clone(),
                         },
                         laps: laps
                             .iter()
@@ -260,22 +204,24 @@ impl ApiDriver {
         }
     }
 
-    pub fn bulk_new(drivers: &[Driver], all_laps: &HashMap<Driver, Vec<Lap>>, all_heats: &[Heat], all_karts: &[Kart]) -> Vec<ApiDriver>{
+    pub fn bulk_new(
+        drivers: &[Driver],
+        all_laps: &HashMap<Driver, Vec<Lap>>,
+        all_heats: &[Session],
+        all_karts: &[Vehicle],
+    ) -> Vec<ApiDriver> {
         drivers
             .iter()
             .map(|driver| {
                 let laps = all_laps.get(driver).unwrap();
-                let heats = Heat::from_laps_offline(&all_heats, laps);
-                let karts = Kart::from_laps_offline(&all_karts, laps);
+                let heats = Session::from_laps_offline(&all_heats, laps);
+                let karts = Vehicle::from_laps_offline(&all_karts, laps);
 
                 ApiDriver::new(driver, &heats, laps, &karts)
             })
             .collect()
     }
 }
-
-
-
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ApiHeat {
@@ -288,5 +234,8 @@ pub struct ApiHeat {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct ApiKart {
     pub number: i32,
-    pub is_child_kart: bool,
+    pub brand: String,
+    pub model: String,
+    pub horsepower: i32,
+    pub modified: bool,
 }

@@ -1,16 +1,18 @@
-use crate::modules::models::driver::Driver;
+extern crate core;
+
+use crate::modules::database::models::driver::Driver;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+pub mod cron_jobs;
 pub mod errors;
 pub mod modules;
-pub mod schema;
-pub mod cron_jobs;
+
+pub mod cornucopia;
 
 pub mod macros {
-    pub mod request_caching;
-    pub mod database_error_handeler;
     pub mod redis;
+    pub mod request_caching;
 }
 
 pub mod routes {

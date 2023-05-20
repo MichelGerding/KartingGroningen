@@ -1,0 +1,34 @@
+.overlay {
+    position: fixed;
+    z-index: 100;
+
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+
+    background-color: rgba(0,0,0,0.5);
+    backdrop-filter: blur(5px);
+
+    display: grid;
+    place-items: center;
+}
+
+.popup {
+    min-width: 900px;
+    width: 50vw;
+    max-height: 80vh;
+    overflow-y: scroll;
+    background-color: white;
+    border-radius: 10px;
+    padding: 0 2em 4em;
+}
+
+.textCenter {
+    text-align: center;
+}
+
+.examples {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+}

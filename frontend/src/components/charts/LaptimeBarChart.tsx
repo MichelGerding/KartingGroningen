@@ -7,10 +7,12 @@ import DropdownSelect from "../dropdown/dropdown";
 import moment from "moment";
 import {getUserLocale} from "get-user-locale";
 
-interface LapTmeChartProps {
+type LapTimeChartProps = {
     dataIn: ChartDataInput[];
     labelKey: string;
     showVSC?: boolean;
+    showText?: boolean;
+    demo?: boolean
 }
 
 interface FilterByLabel {
@@ -23,19 +25,20 @@ type Laptime = {
 }
 
 
-export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChartProps) {
+export default function LapTimeBarChart({dataIn, labelKey, showVSC, showText = true, demo = false}: LapTimeChartProps) {
     const {width, ref} = useResizeDetector();
     const [slowPercent, setSlowPercent] = useState(35);
-    const [showLaptimes, setShowLaptimes] = useState(true);
+    const [showLaptimes, setShowLaptimes] = useState(!demo);
     const [VSCShown, setVSCShown] = useState(showVSC ?? true);
+    const xAnnos: XAxisAnnotations[] = [];
 
     // parse the data
     let data: FilterByLabel = {};
     dataIn.forEach((d) => {
         let k = d[labelKey];
         // check if k is a valid date
-        const date = moment(k, "YYYY-MM-DDTHH:mm");
-        if (date.isValid()) {
+        if (labelKey === "date") {
+            const date = moment(k, "YYYY-MM-DDTHH:mm");
             k = date.toDate().toLocaleString(
                 getUserLocale({fallbackLocale: "en-US", useFallbackLocale: true}) as string,
                 {
@@ -57,7 +60,6 @@ export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChart
         data[k as string].push(d);
     });
 
-    const xAnnos: XAxisAnnotations[] = []
 
     // setup the chart options
     const options = {
@@ -98,7 +100,7 @@ export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChart
             const lap = data[key].find((d) => d.lap_in_heat === i);
             return {
                 x: key,
-                y: lap ? lap.laptime : 0,
+                y: lap ? lap.value : 0,
             }
         })
 
@@ -107,7 +109,6 @@ export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChart
             data: laps
         })
     }
-
 
     if (VSCShown) {
         calculateVSCMoments(data, slowPercent).map((e) => xAnnos.push(e))
@@ -154,22 +155,46 @@ export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChart
 
         )
     }
+
+    const renderText = () => {
+        if (showText && !demo) {
+            return (
+                <>
+                    <h2>Timeline</h2>
+                    <p>
+                        This chart shows a timeline of the laps a driver has made.
+                        This is useful to see when all drivers where slow and the lap is not representative. as each color
+                        corresponds to a lap in heat
+                        The red areas make this easier by showing a estimation when all drivers where slow.
+                        This is shown when at least {slowPercent}% have a outlier lap.
+                        This is not 100% accurate but gives a good indication.
+                        <br/>
+                        <br/>
+                        this percentage can be changed by changing the input value below the chart. if set to 0% all moments a
+                        driver had a outlier lap will be shown
+                        below the chart is also a dropdown to show or hide the laptime values. {showSlowLapsText()}
+                    </p>
+                </>
+            )
+        }
+    }
+
+    if (demo) {
+        return (
+            <div ref={ref}>
+                <Chart
+                    options={options}
+                    series={series}
+                    type="bar"
+                    width={chartWidth}
+                    height={chartHeight}
+                />
+            </div>
+        )
+    }
     return (
         <div ref={ref}>
-            <h2>Timeline</h2>
-            <p>
-                This chart shows a timeline of the laps a driver has made.
-                This is useful to see when all drivers where slow and the lap is not representative. as each color
-                corresponds to a lap in heat
-                The red areas make this easier by showing a estimation when all drivers where slow.
-                This is shown when at least {slowPercent}% have a outlier lap.
-                This is not 100% accurate but gives a good indication.
-                <br/>
-                <br/>
-                this percentage can be changed by changing the input value below the chart. if set to 0% all moments a
-                driver had a outlier lap will be shown
-                below the chart is also a dropdown to show or hide the laptime values. {showSlowLapsText()}
-            </p>
+            {renderText()}
             <Chart
                 options={options}
                 series={series}
@@ -195,7 +220,7 @@ export default function LapTimeBarChart({dataIn, labelKey, showVSC}: LapTmeChart
 
 function calculateVSCMoments(data: FilterByLabel, slowPercent: number) {
     const heatTime = Math.max(...Object.keys(data).map((driver) => {
-        return data[driver].reduce((acc, d) => acc + d.laptime, 0)
+        return data[driver].reduce((acc, d) => acc + d.value, 0)
     }));
 
     const outlierLaps = getOutlierLapsPerDriver(data);
@@ -219,13 +244,13 @@ function getOutlierLapsPerDriver(data: FilterByLabel) {
     const outlierLaps: { [key: string]: Laptime[] } = {};
 
     Object.keys(data).forEach((driver) => {
-        const mean = data[driver].reduce((acc, d) => acc + d.laptime, 0) / data[driver].length;
-        const std = Math.sqrt(data[driver].reduce((acc, d) => acc + Math.pow(d.laptime - mean, 2), 0) / data[driver].length);
+        const mean = data[driver].reduce((acc, d) => acc + d.value, 0) / data[driver].length;
+        const std = Math.sqrt(data[driver].reduce((acc, d) => acc + Math.pow(d.value - mean, 2), 0) / data[driver].length);
         // assign the outlier laps to the driver
         outlierLaps[driver] = data[driver]
-            .filter((d) => (d.laptime - mean > std * 2) || d.laptime < 45)
+            .filter((d) => (d.value - mean > std * 2) || d.value < 45)
             .map(e => {
-                return {laptime: e.laptime, lap_in_heat: e.lap_in_heat} as Laptime
+                return {laptime: e.value, lap_in_heat: e.lap_in_heat} as Laptime
             });
     });
 
@@ -254,14 +279,14 @@ function getSlowLapsPerDriver(outlierLaps: { [p: string]: Laptime[] }, data: Fil
             let lap = laps[i];
 
             if (lap.lap_in_heat == outlierLaps[driver][outlierLap].lap_in_heat) {
-                startTimes.push({start: totaltime, end: totaltime + lap.laptime});
+                startTimes.push({start: totaltime, end: totaltime + lap.value});
                 outlierLap++;
 
                 if (outlierLap >= outlierLaps[driver].length) {
                     break;
                 }
             }
-            totaltime += lap.laptime;
+            totaltime += lap.value;
         }
 
         outlierLapsStartTimes[driver] = startTimes;
@@ -328,3 +353,4 @@ function slowSecondsToZones(slowSeconds: number[], minLength: number = 5, mergeL
     // if any are less then 5 seconds long remove them
     return outlierTimes.filter((d) => d.end - d.start > minLength);
 }
+

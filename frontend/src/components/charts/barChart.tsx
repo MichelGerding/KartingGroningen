@@ -32,15 +32,23 @@ function formatData(inputData: ChartDataInput[], labelKey: string) {
     return data
 }
 
-function createChartOption(data: FilterByLabel) {
+function createChartOption(data: FilterByLabel, labelKey: string) {
+    const cats = Object.keys(data).map((k) => {
+        if (labelKey !== "date") {
+            return k;
+        }
+        return moment.unix(parseInt(k)).format("YYYY-MM-DD")
+    });
+
     return {
+
         zoom: {
             enabled: true,
             type: 'x',
             autoScaleYaxis: true
         },
         xaxis: {
-            categories: Object.keys(data).map((k) => moment.unix(parseInt(k)).format("YYYY-MM-DD"))
+            categories: cats,
         },
     }
 }
@@ -49,7 +57,7 @@ function parseDataToLapsPerDay(data: FilterByLabel) {
     const dataArray: {date: string; amount_of_laps: number}[] = [];
     Object.keys(data).forEach((k) => {
         const laps = data[k];
-        const laptime = laps.reduce((acc, lap) => acc + lap.laptime, 0) / laps.length;
+        const laptime = laps.reduce((acc, lap) => acc + lap.value, 0) / laps.length;
         dataArray.push({
             date: k,
             amount_of_laps: laptime,
@@ -73,7 +81,7 @@ export default function BarChart({dataIn, labelKey}: LapTmeChartProps) {
     const {width, ref} = useResizeDetector();
 
     const data = formatData(dataIn, labelKey);
-    const options = createChartOption(data)
+    const options = createChartOption(data, labelKey);
 
     const sorted = parseDataToLapsPerDay(data);
 

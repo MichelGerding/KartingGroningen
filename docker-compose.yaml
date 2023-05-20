@@ -3,6 +3,8 @@ version: "3"
 services:
   backend:
     build: backend
+    links:
+         - "cache:redis"
 
   nginx:
     image: nginx:latest
@@ -17,4 +19,8 @@ services:
 
   frontend:
     build: frontend
+
+  cache:
+    image: redis:latest
+    container_name: kart_redis
 

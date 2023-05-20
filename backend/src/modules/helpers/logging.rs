@@ -1,12 +1,11 @@
-use std::env;
 use dotenvy::dotenv;
 use fern::Dispatch;
+use std::env;
 
 pub fn setup_logging() -> Result<(), fern::InitError> {
     dotenv().ok();
     // get log level
-    let verbosity = env::var("LOGGING_LEVEL")
-        .expect("Failed to get LOGGING_LEVEL from .env file");
+    let verbosity = env::var("LOGGING_LEVEL").expect("Failed to get LOGGING_LEVEL from .env file");
 
     let verbosity_str = verbosity.as_str();
 
@@ -22,7 +21,7 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
         _ => {
             // default to info
             base_config.level(log::LevelFilter::Info)
-        },
+        }
     };
 
     let file_logger_config = Dispatch::new()
@@ -42,8 +41,7 @@ pub fn setup_logging() -> Result<(), fern::InitError> {
 
     let stdout_logger_config = Dispatch::new()
         .format(|out, message, record| {
-            if record.target().starts_with("rocket") ||
-                record.target() == "_" {
+            if record.target().starts_with("rocket") || record.target() == "_" {
                 return out.finish(format_args!("{}", message));
             }
 
