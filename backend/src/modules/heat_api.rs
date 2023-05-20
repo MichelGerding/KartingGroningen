@@ -1,26 +1,22 @@
-use diesel::{PgConnection};
 use serde::Deserialize;
 
 use std::fmt::Debug;
 
 use crate::errors::{CustomResult, Error};
-use crate::modules::models::driver::{sanitize_name, Driver};
-use crate::modules::models::heat::Heat;
-use crate::modules::models::kart::Kart;
-use crate::modules::models::lap::{Lap, NewLap};
-use log::{error, info, warn};
-use tokio::task::{JoinSet};
+use crate::modules::database::models::driver::{sanitize_name, Driver};
+use crate::modules::database::models::session::Session;
+use crate::modules::database::models::vehicle::Vehicle;
+use crate::modules::database::models::lap::{Lap, NewLap};
+use log::{info, warn};
 
+use tokio::task::JoinSet;
 
 
 pub async fn get_heats_from_api(heat_ids: Vec<String>) -> Vec<WebResponse> {
-
     let mut tasks = JoinSet::new();
 
     for heat_id in heat_ids {
-        tasks.spawn(async move {
-            get_heat_from_api(heat_id).await
-        });
+        tasks.spawn(get_heat_from_api(heat_id));
     }
 
     let mut heats: Vec<WebResponse> = Vec::new();
@@ -36,12 +32,10 @@ pub async fn get_heats_from_api(heat_ids: Vec<String>) -> Vec<WebResponse> {
     }
 
     heats
-
 }
 
 pub async fn get_todays_heats_from_api() -> Vec<String> {
     let mut heats: Vec<String> = Vec::new();
-
     let request_url = "http://reserveren.kartbaangroningen.nl/GetHeatResults.ashx";
     let response = reqwest::get(request_url).await.unwrap();
 
@@ -66,21 +60,26 @@ pub async fn get_heat_from_api(heat_id: String) -> serde_json::Result<WebRespons
 
     let body = response.text().await.unwrap();
 
+
     // clean response string
     let mut body_cleaned = body.replace('(', "");
     body_cleaned = body_cleaned.replace(");", "");
     serde_json::from_str(&body_cleaned)
 }
 
-pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<String> {
-    if Heat::exists(conn, &heat.heat.id) {
+pub async fn save_heat(heat: WebResponse) -> CustomResult<String> {
+    println!("0");
+
+    if Session::exists(&heat.heat.id).await {
         return Err(Error::AlreadyExistsError {});
     }
 
+    println!("1");
 
     // cleanup the name
     let mut name = heat.heat.heat_type_name.clone();
     let fullchars = "Grand Prix";
+    println!("2");
     if name.contains("Gran") && !name.ends_with("x") {
         for i in 0..(fullchars.len() - 4) {
             // get the first name.len - 1 letters of the string
@@ -94,63 +93,58 @@ pub fn save_heat(conn: &mut PgConnection, heat: WebResponse) -> CustomResult<Str
             }
         }
     }
+    println!("3");
 
     for driver in &heat.results {
         if driver.participation.driver_name.parse::<f64>().is_ok() {
             return Err(Error::InvalidNameError {});
         }
     }
+    println!("4");
 
-    match Heat::new(conn, &heat.heat.id, &*name, &heat.heat.start_time) {
-        Ok(heat_id) => {
-            for driver in heat.results {
-                let driver_name = sanitize_name(&driver.participation.driver_name);
+    let heat_id = Session::ensure_exists(&heat.heat.id, &*name, &heat.heat.start_time).await;
+    println!("5");
 
-                let kart = Kart::ensure_exists(conn, driver.result.kart_nr, None);
-                let driver_id = match Driver::ensure_exists(conn, &driver_name) {
-                    Ok(driver_) => driver_,
-                    Err(err) => {
-                        error!(target: "modules/heat_api:save_heat", "Error ensuring driver({}) exists trying next driver. (err: {})", &driver_name, err);
-                        continue;
-                    }
-                };
+    for driver in heat.results {
+        let driver_name = sanitize_name(&driver.participation.driver_name);
 
-                let mut laps: Vec<NewLap> = Vec::new();
+        let kart = Vehicle::ensure_exists(
+            driver.result.kart_nr,
+            "RiM0".to_string(),
+            "ALPHA2".to_string(),
+            9,
+            true).await;
 
-                let mut lap_in_heat = 0;
-                for lap in driver.result.lap_times {
-                    lap_in_heat += 1;
-                    laps.push(NewLap {
-                        heat: heat_id.id,
-                        driver: driver_id.id,
-                        kart_id: kart.id,
-                        lap_in_heat: lap_in_heat as i32,
-                        lap_time: lap,
-                    });
-                }
+        println!("5.1");
+        let driver_id = Driver::ensure_exists(&driver_name).await;
+        println!("5.2");
 
-                let _ = Lap::insert_bulk(conn, &laps);
-            }
+        let mut laps: Vec<NewLap> = Vec::new();
 
-            match heat_id.apply_ratings(conn) {
-                Ok(_) => {}
-                Err(error) => {
-                    error!(target: "modules/heat_api:save_heat", "error applying ratings for heat({}). (err:{})", &heat_id.heat_id, error)
-                }
-            };
-
-            Ok(heat_id.heat_id)
+        let mut lap_in_heat = 0;
+        for lap in driver.result.lap_times {
+            lap_in_heat += 1;
+            laps.push(NewLap {
+                heat: heat_id.id,
+                driver: driver_id.id,
+                kart_id: kart.id,
+                lap_in_heat: lap_in_heat as i32,
+                lap_time: lap,
+            });
         }
-        Err(error) => {
-            warn!(target: "modules/heat_api:querying_heat", "Error inserting heat. (error: {})", error);
-            Err(Error::DatabaseError {})
-        }
+
+        let _ = Lap::insert_bulk(&laps).await;
+        println!("5.3");
+
     }
+    println!("6");
 
+    heat_id.apply_ratings().await;
+    println!("7");
 
-
-
+    Ok(heat_id.heat_id)
 }
+
 
 #[derive(Deserialize, Debug)]
 struct HeatsList {

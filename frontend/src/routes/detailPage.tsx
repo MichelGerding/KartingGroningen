@@ -23,6 +23,7 @@ const dataTypeOptions: {
         keys: ["name", "fastest_lap_time", "avg_lap_time", "median_lap_time", "total_laps", "analyze-name"],
         chartLabel: "driver",
         tableEndpoint: "drivers",
+
     },
     drivers: {
         keys: ["start_time", "amount_of_laps", "fastest_lap_time", "average_lap_time", "analyze-heat_id"],
@@ -39,7 +40,7 @@ export default function DetailPage() {
 
     // get the data from the backend
     const fetchData = async () => {
-        const response = await fetch(`/api/${type}/${id}/full`);
+        const response = await fetch(`${import.meta.env.VITE_API_BASEURL}/api/${type}/${id}/full`);
         let data = await response.json() as any;
 
         let newChartData: ChartDataInput[] = [];
@@ -53,7 +54,7 @@ export default function DetailPage() {
                     return heat.laps.forEach((lap) => {
                         newChartData.push({
                             date: heat.start_date.toString(),
-                            laptime: lap.lap_time,
+                            value: lap.lap_time,
                             kart: heat.kart,
                             lap_in_heat: lap.lap_number,
                         } as ChartDataInput);
@@ -89,7 +90,7 @@ export default function DetailPage() {
                             lap_in_heat: lap.lap_number,
                             date: data.start_time,
                             driver: result.driver.driver_name,
-                            laptime: lap.lap_time,
+                            value: lap.lap_time,
                             kart: result.kart,
                         } as ChartDataInput);
                     })

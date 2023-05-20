@@ -5,6 +5,7 @@ import { getUserLocale } from 'get-user-locale';
 import {Dna} from "react-loader-spinner";
 import TypingText from "../typingText/typingText";
 import RedirectButton from "../redirectButton/redirectButton";
+import LoadingSpinner from "../loadingSpinner/loadingSpinner";
 
 export type Direction = "asc" | "desc";
 
@@ -45,13 +46,7 @@ export default function StyledTable({data, keys, searchState, endpoint, indexSta
     const renderData = () => {
         if (searchState) {
                 return <tr><td className={styles.emptyTable} colSpan={keys.length + 1}>
-                    <div className={styles.loadWrapper}>
-                        <Dna
-                            visible={true}
-                            wrapperClass={styles.spinnerWrapper}
-                        />
-                        <p>Loading<TypingText text={"..."} interval={250} /></p>
-                    </div>
+                    <LoadingSpinner />
                 </td></tr>
         }
 

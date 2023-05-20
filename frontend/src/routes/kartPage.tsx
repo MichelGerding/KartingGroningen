@@ -23,7 +23,7 @@ export default function KartDetailPage() {
 
     // get the data from the backend
     const fetchData = async () => {
-        const response = await fetch(`/api/${type}/${id}/full`);
+        const response = await fetch(`${import.meta.env.VITE_API_BASEURL}/api/${type}/${id}/full`);
         let data = await response.json() as ApiKartResult;
 
         let newLapSeries: ChartDataInput[] = [];
@@ -77,23 +77,23 @@ export default function KartDetailPage() {
 
             let fastestLap = laps[0].lap_time;
             newLapSeries.push({
-                laptime: fastestLap,
+                value: fastestLap,
                 date: date,
                 driver: "fastest",
             })
             newLapSeries.push({
-                laptime: average,
+                value: average,
                 date: date,
                 driver: "average",
             });
             newLapSeries.push({
-                laptime: median,
+                value: median,
                 date: date,
                 driver: "median",
             });
             // set the amount of new drivers
             newDriverAmountSeries.push({
-                laptime: amountOfLaps,
+                value: amountOfLaps,
                 type: "column",
                 date: date,
                 driver: "Amount of laps driven",

@@ -1,4 +1,0 @@
-ALTER TABLE Drivers
-    DROP CONSTRAINT IF EXISTS fk_driver_laps;
-
-DROP TABLE IF EXISTS public.Laps;

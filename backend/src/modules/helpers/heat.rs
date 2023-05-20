@@ -1,7 +1,7 @@
+use crate::errors::{CustomResult, Error};
+use log::warn;
 use std::io::ErrorKind::PermissionDenied;
 use std::path::Path;
-use log::{warn};
-use crate::errors::{CustomResult, Error};
 
 pub struct HeatsHelper {}
 
@@ -25,12 +25,8 @@ impl HeatsHelper {
 
             Err(error) => {
                 return match error.kind() {
-                    PermissionDenied => {
-                        Err(Error::PermissionDeniedError {})
-                    },
-                    _ => {
-                        Err(Error::FileDoesNotExistError {})
-                    }
+                    PermissionDenied => Err(Error::PermissionDeniedError {}),
+                    _ => Err(Error::FileDoesNotExistError {}),
                 }
             }
         };

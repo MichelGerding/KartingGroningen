@@ -1,6 +1,13 @@
 .nav {
+    position: fixed;
+    top: 0;
     background-color: white;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+    align-content: center;
+
+    height: 60px;
+    width: 100vw;
+    z-index: 999;
 }
 
 .div {
@@ -16,12 +23,12 @@
     font-size: 1.5rem;
     font-weight: bold;
     letter-spacing: 0.1em;
+    line-height: 60px;
 }
 
 
 .links {
     list-style: none;
-
     display: flex;
     flex-direction: row;
     justify-content: space-between;
@@ -33,4 +40,39 @@
 .navLink {
     text-decoration: none;
     color: black;
+}
+
+.hamburger {
+    display: none;
+}
+
+@media screen and (max-width: 600px) {
+    .links {
+        display: none;
+    }
+    .hamburger {
+        display: block;
+        font-size: 1.5rem;
+        cursor: pointer;
+    }
+
+    .links {
+        display: flex;
+        position: absolute;
+        background: white;
+        z-index: 1;
+
+        height: calc(100vh - 40px);
+        width: 80vw;
+
+        left: -100%;
+        top: 40px;
+
+        flex-direction: column;
+        justify-content: center;
+        align-items: start;
+        gap: 4em;
+        transition: all 0.5s ease;
+    }
+
 }

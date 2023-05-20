@@ -6,14 +6,15 @@ import {useEffect, useState} from "react";
 import {getUserLocale} from "get-user-locale";
 import moment from "moment/moment";
 
-interface LapTmeChartProps {
+type LapTimeChartProps = {
     dataIn: ChartDataInput[];
     xKey?: string;
     labelKey: string;
     showOutlierFilter?: boolean;
+    showText?: boolean;
 }
 
-interface FilterByLabel {
+type FilterByLabel = {
     [key: string]: ChartDataInput[];
 }
 
@@ -59,6 +60,10 @@ function generateOptions(legendClick: any, dataIn: ChartDataInput[], fastestLapT
             events: {
                 legendClick: legendClick
             },
+
+            animations: {
+                enabled: false, //no animations
+            },
         },
         zoom: {
             enabled: true,
@@ -98,8 +103,9 @@ export default function LapTimeChart({
                                          dataIn,
                                          labelKey,
                                          xKey = "lap_in_heat",
-                                         showOutlierFilter = true
-                                     }: LapTmeChartProps) {
+                                         showOutlierFilter = true,
+                                         showText = true
+                                     }: LapTimeChartProps) {
 
     const data = parseData(dataIn, labelKey);
 
@@ -144,14 +150,14 @@ export default function LapTimeChart({
                     if (showVSC) {
                         return {
                             x: d[xKey],
-                            y: d.laptime,
+                            y: d.value,
                         };
                     } else {
-                        const avgLaptime = data[label].reduce((acc, d) => acc + d.laptime, 0) / data[label].length;
-                        const std = Math.sqrt(data[label].reduce((acc, d) => acc + Math.pow(d.laptime - avgLaptime, 2), 0) / data[label].length);
+                        const avgLaptime = data[label].reduce((acc, d) => acc + d.value, 0) / data[label].length;
+                        const std = Math.sqrt(data[label].reduce((acc, d) => acc + Math.pow(d.value - avgLaptime, 2), 0) / data[label].length);
                         return {
                             x: d.lap_in_heat,
-                            y: (d.laptime - avgLaptime) < std ? d.laptime : null,
+                            y: (d.value - avgLaptime) < std ? d.value : null,
                         }
                     }
                 })
@@ -222,18 +228,39 @@ export default function LapTimeChart({
     const chartWidth = width ?? 500;
     const aspectRatio = 9 / 22;
     const chartHeight = chartWidth * aspectRatio;
+
+    if (showText) {
+
+        return (
+            <div ref={ref}>
+                <h2> All laps</h2>
+                <p>
+                    The chart below shows all laps of the selected drivers. The average laptime is
+                    marked with a green line.
+                    To show the average laptime of a subset of drivers, click on the legend to
+                    toggle
+                    the drivers.
+                    You can also zoom in and out of the chart by clicking and dragging on the
+                    chart.<br/>
+                    <br/>
+                    finally you can toggle the outlier laps by clicking on the dropdown below the
+                    chart.
+                </p>
+
+
+                <Chart
+                    options={options}
+                    series={series}
+                    type="line"
+                    width={chartWidth}
+                    height={chartHeight}
+                />
+                {renderDropdown()}
+            </div>
+        );
+    }
     return (
         <div ref={ref}>
-            <h2> All laps</h2>
-            <p>
-                The chart below shows all laps of the selected drivers. The average laptime is marked with a green line.
-                To show the average laptime of a subset of drivers, click on the legend to toggle the drivers.
-                You can also zoom in and out of the chart by clicking and dragging on the chart.<br/>
-                <br/>
-                finally you can toggle the outlier laps by clicking on the dropdown below the chart.
-            </p>
-
-
             <Chart
                 options={options}
                 series={series}
@@ -243,19 +270,18 @@ export default function LapTimeChart({
             />
             {renderDropdown()}
         </div>
-    )
-
+    );
 
 }
 
 function fastestLaptime(dataIn: ChartDataInput[]) {
-    return Math.min(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime))
+    return Math.min(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.value))
 }
 
 function slowestLaptime(dataIn: ChartDataInput[]) {
-    return Math.max(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.laptime))
+    return Math.max(...dataIn.filter((d) => d.type === "line" || d.type === undefined).map((d) => d.value))
 }
 
 function standardDeviation(dataIn: ChartDataInput[]) {
-    return Math.sqrt(dataIn.reduce((acc, d) => acc + Math.pow(d.laptime - dataIn.reduce((acc, d) => acc + d.laptime, 0) / dataIn.length, 2), 0) / dataIn.length);
+    return Math.sqrt(dataIn.reduce((acc, d) => acc + Math.pow(d.value - dataIn.reduce((acc, d) => acc + d.value, 0) / dataIn.length, 2), 0) / dataIn.length);
 }

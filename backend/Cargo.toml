@@ -5,8 +5,18 @@ edition = "2021"
 
 
 [dependencies]
-# Databases/Caching
-diesel = { version = "2.0", features = ["postgres", "chrono"] }
+# Databases
+cornucopia_async = "0.4.0"
+cornucopia = "0.9.0"
+futures = "0.3.26"
+time = "0.3.20"
+
+tokio-postgres = { version = "0.7.7", features=["with-time-0_3", ] }
+postgres-types = { version = "0.2.4", features = ["derive"] }
+
+## Connection pooling
+deadpool-postgres = "0.10.4"
+
 redis= "0.22"
 
 # logging
@@ -25,6 +35,7 @@ serde_json = "1.0"
 rocket = { version="0.5.0-rc.2", features= ["json"]}
 rocket_contrib = { version = "0.4", default-features=false, features = ["serve"] }
 
+
 # String manipulation
 regex = "1.7"
 inflections = "1.1"
@@ -37,8 +48,12 @@ dotenvy = "0.15"
 
 # Async
 tokio = { version = "1.23", features = ["full"] }
-tokio-cron-scheduler = { version = "*", features=["signal"] }
+tokio-cron-scheduler = { version = "0.9.3", features=["tokio-postgres"] }
 
 # custom modules
-identifiable-derive = { version = "*", path = "src/macros/identifiable-derive" }
-json-response-derive = {version = "*", path = "src/macros/json-response-derive" }
+identifiable-derive = { version = "*", path = "../lib/identifiable-derive" }
+json-response-derive = {version = "*", path = "../lib/json-response-derive" }
+task_queue = { version = "*", path = "../lib/task_queue"}
+
+[build-dependencies]
+cornucopia = "0.9.0"

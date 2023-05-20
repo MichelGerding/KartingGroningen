@@ -20,7 +20,8 @@ export default function AllPage() {
 
     const keys = allKeys[type];
 
-    let endpoint = `/api/${type}/` + (type === "karts" ? "all" : "search");
+
+    let endpoint = `${import.meta.env.VITE_API_BASEURL}/api/${type}/` + (type === "karts" ? "all" : "search");
 
     return (
         <div style={{
@@ -37,7 +38,12 @@ export default function AllPage() {
                 paddingLeft: "2rem",
                 fontSize: "3rem",
             }}> All {type} </h1>
-            <SearchableTable key={type} keys={keys} endpoint={endpoint} type={type} hasSearch={type === "drivers"}/>
+            <div style={{
+                overflowX: 'auto',
+                width: '100%',
+            }}>
+                <SearchableTable key={type} keys={keys} endpoint={endpoint} type={type} hasSearch={type === "drivers"}/>
+            </div>
 
         </div>
 

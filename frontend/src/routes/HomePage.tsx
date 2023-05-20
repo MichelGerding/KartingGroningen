@@ -7,6 +7,8 @@ const linkStyle = {
 } as React.CSSProperties;
 
 export default function HomePage() {
+
+
     return (
         <div>
             <Hero

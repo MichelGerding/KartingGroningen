@@ -52,3 +52,33 @@
     min-height: 1rem;
     margin-top: 0;
 }
+
+@media screen and (max-width: 760px) {
+    .content {
+        flex-direction: column;
+        gap: 1rem;
+
+        /*align column to the left*/
+        align-items: start;
+    }
+
+    .content > * {
+        max-width: 100%;
+    }
+
+    .content > div:not(.text) {
+        display: flex;
+        justify-content: space-between;
+        width: 100%;
+    }
+    .text {
+        max-width: 100%;
+        padding: 1ch;
+    }
+}
+
+@media screen and (max-width: 450px) {
+    .content > div:not(.text) {
+        display: block;
+    }
+}
